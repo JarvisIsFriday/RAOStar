@@ -10,6 +10,7 @@
 import operator 
 import numpy as np 
 import time 
+from collections import deque
 
 from raostarhypergraph import RAOStarGraphNode, RAOStarGraphOperator, RAOStarHyperGraph
 from belief import BeliefState,avg_func,bound_prob
@@ -79,6 +80,7 @@ class RAOStar(object):
 		prev_root_val = np.inf if (self.model.optimization == 'maximize') else -np.inf
 		interrupted = False
 		while len(self.opennodes) > 0 and (count <= iter_limit) and (time.time()-self.start_time <= time_limit):
+			print(self.opennodes)
 			count += 1
 			expanded_nodes = self.expand_best_partial_solution()
 			self.update_values_and_best_actions(expanded_nodes)
@@ -89,12 +91,12 @@ class RAOStar(object):
 
 			root_value = root.value
 			# root node changed from its best value 
-			if not np.isclose(root_value, prev_root_value):
+			if not np.isclose(root_value, prev_root_val):
 				# if the heuristic is admissible, the root value can only degrade 
-				if self.is_better(root_value, prev_root_value):
+				if self.is_better(root_value, prev_root_val):
 					print('Warning: root value improved. Check admissibility')
 				else:
-					prev_root_value = root_value
+					prev_root_val = root_value
 		policy = self.extract_policy()
 		return policy, self.graph
 
@@ -152,13 +154,13 @@ class RAOStar(object):
 				if not node.terminal:
 					self.opennodes.add(node)
 
-	def _get_all_actions(self, belief, A):
+	def get_all_actions(self, belief, A):
 		if len(belief)>0:
 			all_node_actions = []
 			action_ids=set() #Uses str(a) as ID
 
-			for particle_key, particle_tuple in belief.items():
-				new_actions = [a for a in A(particle_tuple[0]) if not str(a) in action_ids]
+			for particle_key, particle_prob in belief.items():
+				new_actions = [a for a in A(particle_key) if not str(a) in action_ids]
 				all_node_actions.extend(new_actions) # add action and make sure no overlap 
 				action_ids.update([str(a) for a in new_actions]) 
 			return all_node_actions
@@ -211,7 +213,7 @@ class RAOStar(object):
 						for idx, child in enumerate(child_obj_list):
 							child.exec_risk_bound = er_bounds[idx]
 						# average instantaneous value (cost or reward) 
-						avg_op_value = avg_func(belief, self.V, act)
+						avg_op_value = avg_func(belief, self.h) #, act)
 						act_obj = RAOStarGraphOperator(name=str(act), op_value=avg_op_value, \
 											properties={'prob':prob_list, 'prob_safe':prob_safe_list, \
 											'obs':pretty_obs_list}) # an "Action" object crerated 
@@ -250,7 +252,7 @@ class RAOStar(object):
 				for act_idx, act in enumerate(all_action_operators):
 					probs = act.properties['prob']
 					prob_safe = act.properties['prob_safe']
-					children = self.graph.children(node, act)
+					children = self.graph.hyperedge_successors(node, act)
 
 					# estimate Q of taking this action from current node. Composed of 
 					# current reward and the average reward of its children 
@@ -260,23 +262,23 @@ class RAOStar(object):
 
 					# compute an estimate of the er of taking this action from current node. 
 					# composed of the current risk and the avg execution risk of its children 
-					exec_risk = risk + (1.0 - risk)*np.sum([p*child.exec_risk for (p,child) in zip(probs_safe, children)])
+					exec_risk = risk + (1.0 - risk)*np.sum([p*child.exec_risk for (p,child) in zip(prob_safe, children)])
 
 					# if execution risk bound has been violated or if Q value for this action is worse 
-					# than current best, we should definitely no select itr. 
+					# than current best, we should definitely no select it. 
 					if (exec_risk > er_bound) or self.is_worse(Q, best_Q):
 						select_action = False 
 					# if risk bound respected and Q value is equal or better 
 					else:
-						if np.isclose(Q, best_Q) and self.enforce_dfs:
-							# select the action if current node is deepter
+						if np.isclose(Q, best_Q):
+							# select the action if current node is deeper
 							select_action = D > best_D
 						else:
 							select_action = True 
 					# Test if the risk bound for the current node has been violated 
 					if select_action:
 						# Updates the execution risk bounds for the children 
-						child_er_bounds, cc_infeasible = self.compute_exec_risk_bounds(er_bound, risk, children, probs_safe)
+						child_er_bounds, cc_infeasible = self.compute_exec_risk_bounds(er_bound, risk, children, prob_safe)
 						if not cc_infeasible: # if chance constraint has not been violated 
 							for idx, child in enumerate(children):
 								child.exec_risk_bound = child_er_bounds[idx] 
@@ -289,7 +291,7 @@ class RAOStar(object):
 
 				# Test if some action has been selected 
 				if best_action_idx >= 0:
-					if (not np.isclsoe(best_Q, current_Q)) and self.is_better(best_Q, current_Q):
+					if (not np.isclose(best_Q, current_Q)) and self.is_better(best_Q, current_Q):
 						print('WARNING: node Q value improved, which might indicate inadmissibility.')
 
 					# updates optimal value est, execution tisk est, and mark best action 
@@ -386,11 +388,13 @@ class RAOStar(object):
 		# for each observation, computes corresponding updated belief 
 		child_obj_list=[]; prob_list=[]; prob_safe_list=[]; new_child_idxs=[]
 		pretty_obs_list=[]; count=0
-		for str_obs, (obs, obs_prob) in obs_distribution.items():
+		for obs, obs_prob in obs_distribution.items():
 			# Performs belief state update 
 			child_blf_state = update_belief(pred_belief, state_to_obs, obs)
 
-			candidate_child_obj = RAOStarGraphNode(child_blf_state)
+			candidate_child_obj = RAOStarGraphNode(value=None, state=BeliefState(child_blf_state))
+			if self.node_name == 'state':
+				start_node = RAOStarGraphNode(name=str(child_blf_state), value=None, state=BeliefState(child_blf_state))
  
 			if self.graph.has_node(candidate_child_obj): # if node already present
 				child_obj = self.graph.nodes[candidate_child_obj]
@@ -401,9 +405,9 @@ class RAOStar(object):
 			child_obj_list.append(child_obj)
 			prob_list.append(obs_prob)
 
-			if str_obs in obs_distribution_safe: 
-				obs_safe_tuple = obs_distribution_safe[str_obs]
-				prob_safe_list.append(obs_safe_tuple[1])
+			if obs in obs_distribution_safe: 
+				obs_safe_prob = obs_distribution_safe[obs]
+				prob_safe_list.append(obs_safe_prob)
 			else: 
 				prob_safe_list.append(0.0)
 			pretty_obs_list.append(self.model)

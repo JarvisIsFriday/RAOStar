@@ -31,7 +31,7 @@ class R2D2Model(object):
 
 	def state_valid(self, state):
 		try: 
-			return self.env(state[0], state[1]) == 0
+			return self.env[state[0], state[1]] == 0
 		except IndexError:
 			return False
 
@@ -73,7 +73,7 @@ class R2D2Model(object):
 				dist = []
 				for i in range(3):
 					for j in range(3):
-						if self.env(i,j) == 0 and (i,j) not in self.icy_blocks:
+						if self.env[i,j] == 0 and (i,j) not in self.icy_blocks:
 							dist.append((i,j),prob)
 				return dist 
 

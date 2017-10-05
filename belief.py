@@ -50,7 +50,7 @@ def avg_func(belief,func,*args):
     """Averages the output of a function over a belief state."""
     # basically the expected value of the function - YC 
     avg_value = 0.0
-    for str_state,(state,prob) in belief.items():
+    for state,prob in belief.items():
         #Applies function on a state, with any number of supplied arguments
         #after that, and averages with the probability.
         avg_value+= func(state,*args)*prob
@@ -65,21 +65,21 @@ def blf_indicator(op_type,belief,ind_func,*args):
     stopping at the first True or False."""
     if op_type == 'count': #How many times it returns true
         count = 0
-        for str_state,(state,prob) in belief.items():
+        for state,prob in belief.items():
             count+= ind_func(state,*args)
         return count
     elif op_type == 'prob':#Probability of being true
         prob = 0.0
-        for str_state,(state,prob) in belief.items():
+        for state,prob in belief.items():
             prob+= ind_func(state,*args)*prob
         return prob
     elif op_type == 'has_true': #Contains true
-        for str_state,(state,prob) in belief.items():
+        for state,prob in belief.items():
             if ind_func(state,*args):
                 return True
         return False
     elif op_type == 'has_false': #Contains false
-        for str_state,(state,prob) in belief.items():
+        for state,prob in belief.items():
             if not ind_func(state,*args):
                 return True
         return False
@@ -105,7 +105,7 @@ def predict_belief(belief,T,r,act):
     pred_belief={}
     pred_belief_safe={}; sum_safe=0.0
     #For every particle of the current belief
-    for str_state,(particle_state,particle_prob) in belief.items():
+    for particle_state,particle_prob in belief.items():
 
         if np.isclose(r(particle_state),0.0): #Safe belief state
             safe_state=True
@@ -122,20 +122,20 @@ def predict_belief(belief,T,r,act):
             #with 0 probability particles.
             if next_prob > 0.0:
                 if next_state in pred_belief:
-                    pred_belief[next_state][1] += next_prob
+                    pred_belief[next_state] += next_prob
                 else:
-                    pred_belief[next_state] = [next_state,next_prob]
+                    pred_belief[next_state] = next_prob
 
                 if safe_state: #Safe belief state
                     if next_state in pred_belief_safe:
-                        pred_belief_safe[next_state][1] += next_prob
+                        pred_belief_safe[next_state] += next_prob
                     else:
-                        pred_belief_safe[next_state] = [next_state, next_prob]
+                        pred_belief_safe[next_state] = next_prob
 
     if sum_safe>0.0: #Not all particles are on violating paths
         #Normalizes the safe predicted belief
         for next_state,b_tuple in pred_belief_safe.items():
-            pred_belief_safe[next_state][1]/=sum_safe
+            pred_belief_safe[next_state]/=sum_safe
 
     return pred_belief,pred_belief_safe
 
@@ -155,7 +155,7 @@ def compute_observation_distribution(pred_belief,pred_belief_safe,O):
     for i,(belief,distrib) in enumerate(zip(beliefs,distribs)):
 
         #For every particle in the current predicted belief
-        for state,(particle_state,particle_prob) in belief.items():
+        for particle_state,particle_prob in belief.items():
 
             #Ensures that 0 probability particles do not 'pollute' the
             #likelihood function.
@@ -173,9 +173,9 @@ def compute_observation_distribution(pred_belief,pred_belief_safe,O):
                             state_to_obs[particle_state].append([obs,obs_prob])
 
                         if obs not in distrib:
-                            distrib[obs] = [obs,obs_prob*particle_prob]
+                            distrib[obs] = obs_prob*particle_prob
                         else:
-                            distrib[obs][1] += obs_prob*particle_prob
+                            distrib[obs] += obs_prob*particle_prob
 
                         #Accumulates the probabilities
                         sum_probs[i]+=obs_prob*particle_prob
@@ -189,13 +189,13 @@ def update_belief(pred_belief,state_to_obs,obs):
 
     #For every particle in the current belief
     prob_sum = 0.0; zero_prob_states=[]
-    for str_state,b_tuple in post_belief.items():
+    for state,prob in post_belief.items():
         #Checks if obs is a possible observation (nonzero likelihood)
         found_obs = False
-        for possible_obs,obs_prob in state_to_obs[str_state]:
+        for possible_obs,obs_prob in state_to_obs[state]:
             if possible_obs == obs: #obs is a possible observation
-                b_tuple[1] *= obs_prob #Likelihood
-                prob_sum += b_tuple[1] #Prob. sum
+                prob *= obs_prob #Likelihood
+                prob_sum += prob #Prob. sum
                 found_obs=True
                 break
         #If obs was not found, that particle is removed (zero probability)
@@ -203,13 +203,13 @@ def update_belief(pred_belief,state_to_obs,obs):
             zero_prob_states.append(str_state)
 
     #Removes zero probability particles
-    for str_state in zero_prob_states:
-        del post_belief[str_state]
+    for state in zero_prob_states:
+        del post_belief[state]
 
     #Normalizes the probabilities
     if prob_sum>0.0:
-        for str_state,b_tuple in post_belief.items():
-            b_tuple[1] /= prob_sum
+        for state,prob in post_belief.items():
+            prob /= prob_sum
 
     return post_belief
 
@@ -217,4 +217,4 @@ def copy_belief(belief):
     """
     Copies the necessary elements that compose a belief state
     """
-    return {k:[v[0],v[1]] for k,v in belief.items()}
+    return {k:v for k,v in belief.items()}
