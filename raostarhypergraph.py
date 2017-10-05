@@ -114,10 +114,6 @@ class RAOStarGraphNode(GraphElement):
         #hashing is key to allow nodes with the same Belief state to be identified as being the same.
 
         #Dictionary key used to detect that tuwo nodes have the same belief state
-        if make_unique:
-            self.hash_key = id(self.state) #Makes the hash
-        else:
-            self.hash_key = self.state.hash_key #Uses the same hash key as the belief states.
 
         self.risk = 0.0             #Belief state risk
         self.exec_risk = 0.0        #Execution risk
