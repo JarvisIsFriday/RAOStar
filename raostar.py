@@ -70,7 +70,7 @@ class RAOStar(object):
 		self.term = model.is_terminal
 		self.node_name = node_name
 
-	def search(self, b0, time_limit=np.inf, iter_limit=np.inf):
+	def search(self, b0, time_limit=np.inf, iter_limit=100):
 		self.start_time = time.time()
 		self.init_search(b0)
 		count = 0 
@@ -80,15 +80,12 @@ class RAOStar(object):
 		prev_root_val = np.inf if (self.model.optimization == 'maximize') else -np.inf
 		interrupted = False
 		while len(self.opennodes) > 0 and (count <= iter_limit) and (time.time()-self.start_time <= time_limit):
-			print(self.opennodes)
 			count += 1
 			expanded_nodes = self.expand_best_partial_solution()
 			self.update_values_and_best_actions(expanded_nodes)
 			# best actions aka policy 
-
 			# Updates the mapping of ancestors on the best policy graph and the list of open nodes 
 			self.update_policy_open_nodes()
-
 			root_value = root.value
 			# root node changed from its best value 
 			if not np.isclose(root_value, prev_root_val):
@@ -195,7 +192,6 @@ class RAOStar(object):
 					# initializes the new child nodes 
 					for c_idx in new_child_idxs:
 						self.set_new_node(child_obj_list[c_idx],parent_depth+1, 0.0)
-
 					# if parent bound Delta is ~ 1.0, the child nodes are guaranteed to have 
 					# their risk bound equal to 1 
 					if (not np.isclose(parent_bound, 1.0)):
@@ -270,11 +266,7 @@ class RAOStar(object):
 						select_action = False 
 					# if risk bound respected and Q value is equal or better 
 					else:
-						if np.isclose(Q, best_Q):
-							# select the action if current node is deeper
-							select_action = D > best_D
-						else:
-							select_action = True 
+						select_action = True 
 					# Test if the risk bound for the current node has been violated 
 					if select_action:
 						# Updates the execution risk bounds for the children 
@@ -324,7 +316,6 @@ class RAOStar(object):
 				for idx_child, child in enumerate(child_list):
 					# Risk consumed by the siblings of the current node 
 					sibling_term = np.sum([p*c.exec_risk for (p,c) in zip(prob_safe_list, child_list) if (c!= child)])
-					
 					# exec risk bound, which caps ar 1.0 
 					exec_risk_bound = min([(parent_term-sibling_term)/prob_safe_list[idx_child], 1.0])
 					# A negative bound means that the chance constraint is guaranteed
@@ -357,7 +348,7 @@ class RAOStar(object):
 
 	def extract_policy(self):
 		# extract policy mapping nodes to actions 
-		queue = dequeue([self.graph.root]) # from root 
+		queue = deque([self.graph.root]) # from root 
 		policy = {}
 		while len(queue) > 0:
 			node = queue.popleft()

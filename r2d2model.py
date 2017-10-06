@@ -29,8 +29,10 @@ class R2D2Model(object):
 		self.optimization = 'minimize' # want to minimize the steps to goal 
 		self.actual_state = (1,0)
 
-	def state_valid(self, state):
-		try: 
+	def state_valid(self, state): # check if a particular state is valid 
+		if state[0] < 0 or state[1] < 0:
+			return False
+		try:
 			return self.env[state[0], state[1]] == 0
 		except IndexError:
 			return False
@@ -45,21 +47,23 @@ class R2D2Model(object):
 		return validActions
 
 	def is_terminal(self, state):
-		return state == self.fire
+		return state == self.goal
 
 	def state_transitions(self, state, action):
+		newstates = []
+		intended_new_state = (state[0]+action[0], state[1]+action[1])
+		if not self.state_valid(intended_new_state):
+			return newstates
+		self.actual_state = intended_new_state
 		if state in self.icy_blocks:
-			intended_new_state = (state[0]+action[0], state[1]+action[1])
-			self.actual_state = intended_new_state
-			newstates = [(intended_new_state,self.icy_move_forward_prob)]
+			newstates.append((intended_new_state,self.icy_move_forward_prob))
 			for slip in [-1, 1]:
-				slipped = [(action[i]+slip)%2 for i in range(2)]
+				slipped = [(action[i]+slip)%2*slip for i in range(2)]
 				slipped_state = (state[0]+slipped[0], state[1]+slipped[1])
 				if self.state_valid(slipped_state):
 					newstates.append((slipped_state,(1-self.icy_move_forward_prob)/2))
-			return newstates
-		newstates = [((state[0]+action[0], state[1]+action[1]),1.0)]
-		self.actual_state = (state[0]+action[0], state[1]+action[1])
+		else:
+			newstates.append((intended_new_state,1.0))
 		return newstates
 
 	def observations(self, state):
