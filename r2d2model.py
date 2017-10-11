@@ -27,7 +27,6 @@ class R2D2Model(object):
 		self.fire = (2,1) # fire located at self.env[2,1]: terminal 
 		self.goal = (1,2) # goal position 
 		self.optimization = 'minimize' # want to minimize the steps to goal 
-		self.actual_state = (1,0)
 
 	def state_valid(self, state): # check if a particular state is valid 
 		if state[0] < 0 or state[1] < 0:
@@ -44,17 +43,18 @@ class R2D2Model(object):
 			newy = state[1] + act[1]
 			if self.state_valid((newx, newy)):
 				validActions.append(act)
+		if state == self.goal:
+			return []
 		return validActions
 
 	def is_terminal(self, state):
-		return state == self.goal
+		return state == self.goal # not sure what this does 
 
 	def state_transitions(self, state, action):
 		newstates = []
 		intended_new_state = (state[0]+action[0], state[1]+action[1])
 		if not self.state_valid(intended_new_state):
 			return newstates
-		self.actual_state = intended_new_state
 		if state in self.icy_blocks:
 			newstates.append((intended_new_state,self.icy_move_forward_prob))
 			for slip in [-1, 1]:
@@ -68,9 +68,9 @@ class R2D2Model(object):
 
 	def observations(self, state):
 		if self.DetermObs:
-			return [(self.actual_state, 1.0)]
+			return [(state, 1.0)]
 		else: # robot only knows if it is on icy or non icy block 
-			if self.actual_state in self.icy_blocks:
+			if state in self.icy_blocks:
 				return [(self.icy_blocks[i], 1/len(self.icy_blocks)) for i in range(len(self.icy_blocks))]
 			else: 
 				prob = 1/(6-len(self.icy_blocks))

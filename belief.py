@@ -160,7 +160,7 @@ def compute_observation_distribution(pred_belief,pred_belief_safe,O):
             #Ensures that 0 probability particles do not 'pollute' the
             #likelihood function.
             if particle_prob>0.0:
-                if i==0:
+                if i==0: # i == 0 the belief, i == 1 the safe belief 
                     state_to_obs[particle_state]=[]
 
                 #For every possible observation (with some probability)
@@ -200,17 +200,15 @@ def update_belief(pred_belief,state_to_obs,obs):
                 break
         #If obs was not found, that particle is removed (zero probability)
         if not found_obs:
-            zero_prob_states.append(str_state)
-
+            zero_prob_states.append(state)
     #Removes zero probability particles
     for state in zero_prob_states:
         del post_belief[state]
 
     #Normalizes the probabilities
     if prob_sum>0.0:
-        for state,prob in post_belief.items():
-            prob /= prob_sum
-
+        for state in post_belief:
+            post_belief[state] /= prob_sum
     return post_belief
 
 def copy_belief(belief):
