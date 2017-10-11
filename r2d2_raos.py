@@ -13,4 +13,5 @@ algo = RAOStar(model)
 
 b_init = {(1,0):1.0}
 
-algo.search(b_init)
+P, G = algo.search(b_init)
+print(P)

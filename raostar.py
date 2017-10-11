@@ -143,7 +143,6 @@ class RAOStar(object):
 		visited = []
 		print("======================") 
 		while len(queue) > 0:
-			print([n.name for n in queue])
 			node = queue.popleft() 
 			visited.append(node)
 			if node.best_action != None: # node already has a best action 
@@ -228,6 +227,7 @@ class RAOStar(object):
 						action_added = True 
 						added_count += 1 
 			if not action_added:
+				print('action not added')
 				self.set_terminal_node(node)
 		return nodes_to_expand # returns the list of node either added actions to or marked terminal 
 
@@ -359,14 +359,18 @@ class RAOStar(object):
 
 	def extract_policy(self):
 		# extract policy mapping nodes to actions 
+		print("===========================")
+		print("=== Extract Policy ========")
+		print("===========================")
 		queue = deque([self.graph.root]) # from root 
 		policy = {}
 		while len(queue) > 0:
 			node = queue.popleft()
-			if node.best_action != None:
-				policy[node] = node.best_action
-				children = self.graph.hyperedge_successors(node, node.best_action)
-				queue.extend(children)
+			if node.name not in policy:
+				if node.best_action != None:
+					policy[node.name] = node.best_action.name
+					children = self.graph.hyperedge_successors(node, node.best_action)
+					queue.extend(children)
 		return policy 
 
 	def choose_node(self):

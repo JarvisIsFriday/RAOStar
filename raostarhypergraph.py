@@ -101,8 +101,8 @@ class RAOStarGraphNode(GraphElement):
         else:
             raise TypeError('The best action at a node should be of type RAOStarGraphOperator.')
 
-    def set_terminal(self,is_terminal):
-        self.is_terminal = is_terminal
+    def set_terminal(self, is_terminal):
+        self.terminal = is_terminal
 
     def set_risk(self,new_risk):
         if new_risk>=0.0 and new_risk<=1.0:
