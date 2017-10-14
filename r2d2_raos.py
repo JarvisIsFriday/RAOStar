@@ -9,7 +9,7 @@ from raostar import RAOStar
 
 ice_blocks = [(1,0), (1,1)]
 model = R2D2Model(ice_blocks)
-algo = RAOStar(model)
+algo = RAOStar(model, cc=0.1)
 
 b_init = {(1,0):1.0}
 
