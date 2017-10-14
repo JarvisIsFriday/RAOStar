@@ -364,13 +364,20 @@ class RAOStar(object):
 		print("===========================")
 		queue = deque([self.graph.root]) # from root 
 		policy = {}
-		while len(queue) > 0:
-			node = queue.popleft()
-			if node.name not in policy:
-				if node.best_action != None:
-					policy[node.name] = node.best_action.name
-					children = self.graph.hyperedge_successors(node, node.best_action)
-					queue.extend(children)
+		for n in self.graph.nodes:
+			node = self.graph.nodes[n]
+			if node.best_action != None:
+				policy[n] = node.best_action.name
+			else:
+				policy[n] = 'None'
+		# while len(queue) > 0:
+		# 	node = queue.popleft()
+		# 	if node.name not in policy:
+		# 		if node.best_action != None:
+		# 			policy[node.name] = node.best_action.name
+		# 			print(node.best_action.name)
+		# 			children = self.graph.hyperedge_successors(node, node.best_action)
+		# 			queue.extend(children)
 		return policy 
 
 	def choose_node(self):
