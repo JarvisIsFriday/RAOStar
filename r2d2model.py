@@ -121,7 +121,7 @@ class R2D2Model(object):
 		if state in self.icy_blocks:
 			newstates.append((intended_new_state, self.icy_move_forward_prob))
 			for slip in [-1, 1]:
-				slipped = [slip if action[i] ==0 else action[i] for i in range(2)]
+				slipped = [(action[i] + slip) % 2 * slip for i in range(2)]
 				slipped_state = (state[0] + slipped[0], state[1] + slipped[1])
 				if self.state_valid(slipped_state):
 					newstates.append(
