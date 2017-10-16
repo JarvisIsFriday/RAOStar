@@ -218,7 +218,7 @@ class RAOStar(object):
 						for idx, child in enumerate(child_obj_list):
 							child.exec_risk_bound = er_bounds[idx]
 						# average instantaneous value (cost or reward) 
-						avg_op_value = avg_func(belief, self.h) #, act)
+						avg_op_value = avg_func(belief, self.h) #, act) ### TODO change to value not heuristic 
 						act_obj = RAOStarGraphOperator(name=str(act), op_value=avg_op_value, \
 											properties={'prob':prob_list, 'prob_safe':prob_safe_list}) 
 											# an "Action" object crerated 
@@ -331,7 +331,7 @@ class RAOStar(object):
 					# to be violated. The same is true if the admissible estimate
 					# of the execution risk for a child node violates its upper bound.
 					if exec_risk_bound >= 0.0:
-						if child.exec_risk<=exec_risk_bound or np.isclose(child.exec_risk,exec_risk_bound):
+						if child.exec_risk <= exec_risk_bound or np.isclose(child.exec_risk,exec_risk_bound):
 							exec_risk_bounds[idx_child] = exec_risk_bound
 						else:
 							infeasible = True
@@ -370,14 +370,6 @@ class RAOStar(object):
 				policy[n] = node.best_action.name
 			else:
 				policy[n] = 'None'
-		# while len(queue) > 0:
-		# 	node = queue.popleft()
-		# 	if node.name not in policy:
-		# 		if node.best_action != None:
-		# 			policy[node.name] = node.best_action.name
-		# 			print(node.best_action.name)
-		# 			children = self.graph.hyperedge_successors(node, node.best_action)
-		# 			queue.extend(children)
 		return policy 
 
 	def choose_node(self):

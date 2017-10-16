@@ -11,7 +11,7 @@ ice_blocks = [(1,0), (1,1)]
 model = R2D2Model(ice_blocks)
 algo = RAOStar(model)
 
-b_init = {(1,0):1.0}
+b_init = {(1,1):1.0}
 
 P, G = algo.search(b_init)
 print(P)
