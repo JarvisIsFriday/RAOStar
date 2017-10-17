@@ -20,7 +20,7 @@ class RAOStar(object):
 	# find optimal policy and/or tree representing partially 
 	# observable domains 
 
-	def __init__(self, model, cc=0.0, cc_type='overall',
+	def __init__(self, model, cc=0.0, cc_type='o',
 		terminal_prob=1.0, randomization=0.0, halt_on_violation=False):
 
 		self.model = model
@@ -64,6 +64,7 @@ class RAOStar(object):
 		self.A = model.actions 
 		self.T = model.state_transitions
 		self.O = model.observations
+		self.V = model.values
 		self.h = model.heuristic
 		self.r = model.state_risk 
 		self.e = model.execution_risk_heuristic
@@ -81,11 +82,16 @@ class RAOStar(object):
 		while len(self.opennodes) > 0 and (count <= iter_limit) and (time.time()-self.start_time <= time_limit):
 			count += 1
 			expanded_nodes = self.expand_best_partial_solution()
-
+			print("risk check 1")
+			print([n.exec_risk_bound for n in self.graph.nodes.values()])
 			self.update_values_and_best_actions(expanded_nodes)
 			# best actions aka policy 
 			# Updates the mapping of ancestors on the best policy graph and the list of open nodes 
+			print("risk check 2")
+			print([n.exec_risk_bound for n in self.graph.nodes.values()])
 			self.update_policy_open_nodes()
+			print("risk check 3")
+			print([n.exec_risk_bound for n in self.graph.nodes.values()])
 			root_value = root.value
 			# root node changed from its best value 
 			if not np.isclose(root_value, prev_root_val):
@@ -140,21 +146,26 @@ class RAOStar(object):
 		# add nodes with no policy yet to opennodes 
 		# policy ancestors={}
 		self.opennodes = set()
-		visited = []
+		expanded = [] # not to be mistaken with the expanded list used in dynamic programming 
+		# simply keep track of the nodes we have expanded before so it doesn't loop forever 
+		# print(n.)
 		print("======================") 
 		while len(queue) > 0:
 			node = queue.popleft() 
-			visited.append(node)
+			# visited.append(node)
 			if node.best_action != None: # node already has a best action 
+				expanded.append(node)
 				children = self.graph.hyperedge_successors(node, node.best_action)
+				print("children risk bound")
+				print([c.exec_risk_bound for c in children])
 				for n in children: 
-					if n not in visited:
+					if n not in expanded:
 						queue.append(n)
 			else: # no best action has been assigned yet 
 				if not node.terminal:
 					self.opennodes.add(node)
-					print("opennodes")
-					print([n.name for n in self.opennodes])
+				print("opennodes")
+				print([(n.name, n.exec_risk_bound) for n in self.opennodes])
 
 	def get_all_actions(self, belief, A):
 		if len(belief)>0:
@@ -218,7 +229,7 @@ class RAOStar(object):
 						for idx, child in enumerate(child_obj_list):
 							child.exec_risk_bound = er_bounds[idx]
 						# average instantaneous value (cost or reward) 
-						avg_op_value = avg_func(belief, self.h) #, act) ### TODO change to value not heuristic 
+						avg_op_value = avg_func(belief, self.V, act)
 						act_obj = RAOStarGraphOperator(name=str(act), op_value=avg_op_value, \
 											properties={'prob':prob_list, 'prob_safe':prob_safe_list}) 
 											# an "Action" object crerated 
@@ -248,7 +259,6 @@ class RAOStar(object):
 				# execution risk bound. the execution risk cap depends on type of chance 
 				# constraint being imposed 
 				er_bound = min([node.exec_risk_bound, self.er_cap])
-
 				best_action_idx = -1 
 				best_Q = self.initial_Q # -inf or inf based on optimization 
 				best_D = -1 # depth 
@@ -259,7 +269,6 @@ class RAOStar(object):
 					probs = act.properties['prob']
 					prob_safe = act.properties['prob_safe']
 					children = self.graph.hyperedge_successors(node, act)
-
 					# estimate Q of taking this action from current node. Composed of 
 					# current reward and the average reward of its children 
 					Q = act.op_value + np.sum([p*child.value for (p, child) in zip(probs, children)])
@@ -269,7 +278,6 @@ class RAOStar(object):
 					# compute an estimate of the er of taking this action from current node. 
 					# composed of the current risk and the avg execution risk of its children 
 					exec_risk = risk + (1.0 - risk)*np.sum([p*child.exec_risk for (p,child) in zip(prob_safe, children)])
-
 					# if execution risk bound has been violated or if Q value for this action is worse 
 					# than current best, we should definitely no select it. 
 					if (exec_risk > er_bound) or self.is_worse(Q, best_Q):
@@ -308,7 +316,7 @@ class RAOStar(object):
 		exec_risk_bounds = [0.0]*len(child_list)
 		# If the parent bound is almost one, the risk of the children are guaranteed to be feasible 
 		if np.isclose(parent_bound, 1.0):
-			exec_risk_bound = [1.0]*len(child_list)
+			exec_risk_bounds = [1.0]*len(child_list)
 			infeasible = False
 		else:
 			# if parent bound isn't one, but risk is almost one, or if parent already violates the risk bound 
