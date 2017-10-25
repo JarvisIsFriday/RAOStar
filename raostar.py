@@ -82,16 +82,10 @@ class RAOStar(object):
 		while len(self.opennodes) > 0 and (count <= iter_limit) and (time.time()-self.start_time <= time_limit):
 			count += 1
 			expanded_nodes = self.expand_best_partial_solution()
-			print("risk check 1")
-			print([n.exec_risk_bound for n in self.graph.nodes.values()])
 			self.update_values_and_best_actions(expanded_nodes)
 			# best actions aka policy 
 			# Updates the mapping of ancestors on the best policy graph and the list of open nodes 
-			print("risk check 2")
-			print([n.exec_risk_bound for n in self.graph.nodes.values()])
 			self.update_policy_open_nodes()
-			print("risk check 3")
-			print([n.exec_risk_bound for n in self.graph.nodes.values()])
 			root_value = root.value
 			# root node changed from its best value 
 			if not np.isclose(root_value, prev_root_val):
