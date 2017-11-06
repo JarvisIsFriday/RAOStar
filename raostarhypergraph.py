@@ -42,85 +42,114 @@ Defines the structures used in the RAO* hypergraph.
 @editor: Yun Chang (yunchang@mit.edu)
 """
 
+
 class GraphElement(object):
     """
     Generic graph element with a name and a unique ID.
     """
-    def __init__(self,name=None, properties={}):
+
+    def __init__(self, name=None, properties={}):
         self.name = name
         self.properties = properties
 
-    def set_name(self,new_name):
+    def set_name(self, new_name):
         self.name = new_name
 
-    def set_properties(self,new_properties):
-        if isinstance(new_properties,dict):
+    def set_properties(self, new_properties):
+        if isinstance(new_properties, dict):
             self.properties = new_properties
         else:
-            raise TypeError('Hypergraph element properties should be given as a dictionary.')
+            raise TypeError(
+                'Hypergraph element properties should be given as a dictionary.')
 
-    def __eq__(x,y):
-        return isinstance(x,GraphElement) and isinstance(y,GraphElement) and (x.name == y.name)
+    def __eq__(x, y):
+        return isinstance(x, GraphElement) and isinstance(y, GraphElement) and (x.name == y.name)
 
     def __ne__(self, other):
         return not self == other
+
 
 class RAOStarGraphNode(GraphElement):
     """
     Class for nodes in the RAO* hypergraph.
     """
-    def __init__(self,value,state,best_action=None,terminal=False,name=None,
-                 properties={},make_unique=False):
-        super(RAOStarGraphNode,self).__init__(name, properties)
-        self.value = value         #Q value
-        self.terminal = terminal   #Terminal flag
-        self.state = state         #Belief state
-        self.best_action = best_action #Best action at the node
 
-        self.risk = 0.0             #Belief state risk
-        self.exec_risk = 0.0        #Execution risk
-        self.exec_risk_bound = 1.0  #Bound on execution risk
-        self.depth = 0              #Initial depth
+    def __init__(self, value, state, best_action=None, terminal=False, name=None,
+                 properties={}, make_unique=False):
+        super(RAOStarGraphNode, self).__init__(name, properties)
+        self.value = value  # Q value
+        self.terminal = terminal  # Terminal flag
+        self.state = state  # Belief state
+        self.best_action = best_action  # Best action at the node
 
-    def set_depth(self,new_depth):
+        self.risk = 0.0  # Belief state risk
+        self.exec_risk = 0.0  # Execution risk
+        self.exec_risk_bound = 1.0  # Bound on execution risk
+        self.depth = 0  # Initial depth
+
+    def set_depth(self, new_depth):
         """Sets new non-negative depth"""
-        if new_depth>=0:
+        if new_depth >= 0:
             self.depth = new_depth
         else:
             raise ValueError('Node depths must be non-negative!')
 
-    def set_value(self,new_value):
+    def set_value(self, new_value):
         self.value = new_value
 
-    def set_state(self,new_state):
+    def set_state(self, new_state):
         self.state = new_state
 
-    def set_best_action(self,new_best_action):
-        if new_best_action==None or isinstance(new_best_action,RAOStarGraphOperator):
+    def set_best_action(self, new_best_action):
+        if new_best_action == None or isinstance(new_best_action, RAOStarGraphOperator):
             self.best_action = new_best_action
         else:
-            raise TypeError('The best action at a node should be of type RAOStarGraphOperator.')
+            raise TypeError(
+                'The best action at a node should be of type RAOStarGraphOperator.')
 
     def set_terminal(self, is_terminal):
         self.terminal = is_terminal
 
-    def set_risk(self,new_risk):
-        if new_risk>=0.0 and new_risk<=1.0:
+    def set_risk(self, new_risk):
+        if new_risk >= 0.0 and new_risk <= 1.0:
             self.risk = new_risk
         else:
-            raise ValueError('Invalid risk value: %f'%(new_risk))
+            raise ValueError('Invalid risk value: %f' % (new_risk))
 
-    def set_exec_risk(self,new_exec_risk):
-        if new_exec_risk>=0.0 and new_exec_risk<=1.0:
+    def set_exec_risk(self, new_exec_risk):
+        if new_exec_risk >= 0.0 and new_exec_risk <= 1.0:
             self.e_risk = new_exec_risk
         else:
-            raise ValueError('Invalid execution risk: %f'%(new_exec_risk))
+            raise ValueError('Invalid execution risk: %f' % (new_exec_risk))
 
-    def set_exec_risk_bound(self,new_exec_risk_bound):
-        if new_exec_risk_bound>=0.0 and new_exec_risk_bound<=1.0:
+    def set_exec_risk_bound(self, new_exec_risk_bound):
+        if new_exec_risk_bound >= 0.0 and new_exec_risk_bound <= 1.0:
             self.e_risk_bound = new_exec_risk_bound
         else:
-            raise ValueError('Invalid execution risk bound: %f'%(new_exec_risk_bound))
+            raise ValueError('Invalid execution risk bound: %f' %
+                             (new_exec_risk_bound))
+
+    def print_node(self):
+        # self.value = value         #Q value
+        # self.terminal = terminal   #Terminal flag
+        # self.state = state         #Belief state
+        # self.best_action = best_action #Best action at the node
+        # self.risk = 0.0             #Belief state risk
+        # self.exec_risk = 0.0        #Execution risk
+        # self.exec_risk_bound = 1.0  #Bound on execution risk
+        # self.depth = 0              #Initial depth
+        best_action_name = None
+        if self.best_action:
+            best_action_name = self.best_action.name
+        print_out = {'state': self.state.belief,
+                     'value': self.value,
+                     'risk': self.risk,
+                     'exec_risk': self.exec_risk,
+                     'exec_risk_bound': self.exec_risk_bound,
+                     'depth': self.depth,
+                     'best_action': best_action_name,
+                     'terminal': self.terminal}
+        print(print_out)
 
     def __str__(self):
         """String representation of a Hypergraph node."""
@@ -131,18 +160,19 @@ class RAOStarGraphOperator(GraphElement):
     """
     Class for operators associated to hyperedge in the RAO* hypergraph.
     """
-    def __init__(self,name=None,op_value=0.0,properties={}):
-        super(RAOStarGraphOperator,self).__init__(name, properties)
 
-        self.op_value = op_value #Value associated with this operator
+    def __init__(self, name=None, op_value=0.0, properties={}):
+        super(RAOStarGraphOperator, self).__init__(name, properties)
 
-        #Dictionary key used to detect that two operators are equal
-        #TODO: This fixes the problem with duplicated operators, but doesn't
-        #answer the question: how can unduplicated actions give rise to
-        #duplicated operators? Answer: because the hypergraph is a graph, and the
-        #same node was being expanded through different paths.
+        self.op_value = op_value  # Value associated with this operator
 
-    def set_op_value(self,new_value):
+        # Dictionary key used to detect that two operators are equal
+        # TODO: This fixes the problem with duplicated operators, but doesn't
+        # answer the question: how can unduplicated actions give rise to
+        # duplicated operators? Answer: because the hypergraph is a graph, and the
+        # same node was being expanded through different paths.
+
+    def set_op_value(self, new_value):
         self.op_value = new_value
 
 
@@ -150,63 +180,65 @@ class RAOStarHyperGraph(GraphElement):
     """
     Class representing an RAO* hypergraph.
     """
+
     def __init__(self, name=None, properties={}):
-        super(RAOStarHyperGraph,self).__init__(name, properties)
-        #Dictionary of nodes mapping their hash keys to themselves
-        self.nodes={}
-        #Dictionary of operators mapping their hash keys to themselves
-        self.operators={}
-        #Nested dictionary {parent_key: {operator_key: successors}}
+        super(RAOStarHyperGraph, self).__init__(name, properties)
+        # Dictionary of nodes mapping their hash keys to themselves
+        self.nodes = {}
+        # Dictionary of operators mapping their hash keys to themselves
+        self.operators = {}
+        # Nested dictionary {parent_key: {operator_key: successors}}
         self.hyperedges = {}
-        #Dictionary from child to sets of parents {child_key: set(parents)}
+        # Dictionary from child to sets of parents {child_key: set(parents)}
         self.parents = {}
 
-    def set_nodes(self,new_nodes):
+    def set_nodes(self, new_nodes):
         self.nodes = new_nodes
 
-    def set_operators(self,new_operators):
+    def set_operators(self, new_operators):
         self.operators = new_operators
 
-    def set_hyperedges(self,new_hyperedges):
-        if isinstance(new_hyperedges,dict):
+    def set_hyperedges(self, new_hyperedges):
+        if isinstance(new_hyperedges, dict):
             self.hyperedge_dict = new_hyperedges
         else:
             raise TypeError('Hyperedges should be given in dictionary form')
 
-    def set_parents(self,new_parents):
-        if isinstance(new_parents,dict):
+    def set_parents(self, new_parents):
+        if isinstance(new_parents, dict):
             self.parent_dict = new_parents
         else:
             raise TypeError('Node parents should be given in dictionary form')
 
-    def set_root(self,new_root):
-        if isinstance(new_root,RAOStarGraphNode):
+    def set_root(self, new_root):
+        if isinstance(new_root, RAOStarGraphNode):
             self.root = new_root
             self.add_node(self.root)
         else:
-            raise TypeError('The root of the hypergraph must be of type RAOStarGraphNode.')
+            raise TypeError(
+                'The root of the hypergraph must be of type RAOStarGraphNode.')
 
-    def add_node(self,node):
+    def add_node(self, node):
         """Adds a node to the hypergraph."""
         if not node in self.nodes:
-            self.nodes[node.name]=node
+            self.nodes[node.name] = node
 
-    def add_operator(self,op):
+    def add_operator(self, op):
         """Adds an operators to the hypergraph."""
         if not op in self.operators:
-            self.operators[op]=op
+            self.operators[op] = op
 
-    def add_hyperedge(self,parent_obj,child_obj_list,op_obj):
+    def add_hyperedge(self, parent_obj, child_obj_list, op_obj):
         """Adds a hyperedge between a parent and a list of child nodes, adding
         the nodes to the graph if necessary."""
-        #Makes sure all nodes and operator are part of the graph.
+        # Makes sure all nodes and operator are part of the graph.
         self.add_node(parent_obj)
         self.add_operator(op_obj)
         for child in child_obj_list:
             self.add_node(child)
 
-        #Adds the hyperedge
-        #TODO: check if the hashing is being done correctly here by __hash__
+        # Adds the hyperedge
+        # TODO: check if the hashing is being done correctly here by __hash__
         if parent_obj in self.hyperedges:
 
             # #TODO:
@@ -241,47 +273,47 @@ class RAOStarHyperGraph(GraphElement):
             #             import ipdb; ipdb.set_trace()
             #             pass
 
-            self.hyperedges[parent_obj][op_obj]=child_obj_list
+            self.hyperedges[parent_obj][op_obj] = child_obj_list
         else:
-            self.hyperedges[parent_obj]={op_obj:child_obj_list}
+            self.hyperedges[parent_obj] = {op_obj: child_obj_list}
 
-        #Records the mapping from children to parent nodes
+        # Records the mapping from children to parent nodes
         for child in child_obj_list:
             if not (child in self.parents):
-                self.parents[child]=set()
+                self.parents[child] = set()
             self.parents[child].add(parent_obj)
 
-    def remove_all_hyperedges(self,node):
+    def remove_all_hyperedges(self, node):
         """Removes all hyperedges at a node."""
         if node in self.hyperedges:
             del self.hyperedges[node]
 
-    def all_node_operators(self,node):
+    def all_node_operators(self, node):
         """List of all operators at a node."""
         return list(self.hyperedges[node].keys()) if node in self.hyperedges else []
 
-    def all_node_ancestors(self,node):
+    def all_node_ancestors(self, node):
         """Set of all node parents, considering all hyperedges."""
         if node in self.parents:
             return self.parents[node]
         else:
             return set()
 
-    def hyperedge_successors(self,node,act):
+    def hyperedge_successors(self, node, act):
         """List of children associated to a hyperedge."""
         if node in self.hyperedges and act in self.hyperedges[node]:
             return self.hyperedges[node][act]
         else:
             return []
 
-    def has_node(self,node):
+    def has_node(self, node):
         """Returns whether the hypergraph contains the node"""
         return (node.name in self.nodes)
 
-    def has_operator(self,op):
+    def has_operator(self, op):
         """Returns whether the hypergraph contains the operator."""
         return (op in self.operators)
 
-    def has_ancestor(self,node):
+    def has_ancestor(self, node):
         """Whether a node has ancestors in the graph."""
         return (node in self.parents)

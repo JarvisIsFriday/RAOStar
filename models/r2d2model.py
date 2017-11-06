@@ -38,6 +38,8 @@ class R2D2Model(object):
             "up": 7,
             "down": 8
         }
+        self.action_list = [(1, 0, "down"), (0, 1, "right"),
+                            (-1, 0, "up"), (0, -1, "left")]
 
     def state_valid(self, state):  # check if a particular state is valid
         if state[0] < 0 or state[1] < 0:
@@ -47,35 +49,62 @@ class R2D2Model(object):
         except IndexError:
             return False
 
+    def in_a_fire(self, state):
+        for fire in self.fires:
+            if state[0] == fire[0] and state[1] == fire[1]:
+                return True
+        return False
+
     def actions(self, state):
+        print('actions for: ' + str(state))
         validActions = []
-        for act in [(1, 0, "down"), (0, 1, "right"), (-1, 0, "up"), (0, -1, "left")]:
+        for act in self.action_list:
             newx = state[0] + act[0]
             newy = state[1] + act[1]
             if self.state_valid((newx, newy)):
                 validActions.append(act)
         if state == self.goal:
             return []
+        if self.in_a_fire(state):
+            return []
         return validActions
 
     def is_terminal(self, state):
-        return state == self.goal  # not sure what this does #mdeyo: is this comment from Yun?
+        # if state[1] == self.goal[1]:
+            # raise ValueError()
+        return state[0] == self.goal[0] and state[1] == self.goal[1]
 
     def state_transitions(self, state, action):
         newstates = []
-        intended_new_state = (state[0] + action[0], state[1] + action[1])
+        # intended_new_state = (state[0] + action[0],
+        #                       state[1] + action[1])
+        # added depth to the state
+        intended_new_state = (state[0] + action[0],
+                              state[1] + action[1], state[2] + 1)
         if not self.state_valid(intended_new_state):
             return newstates
-        if state in self.icy_blocks:
-            newstates.append((intended_new_state, self.icy_move_forward_prob))
+        if (state[0], state[1]) in self.icy_blocks and "right" in action:
+            print('got right action!')
+            newstates.append([intended_new_state, self.icy_move_forward_prob])
             for slip in [-1, 1]:
                 slipped = [(action[i] + slip) % 2 * slip for i in range(2)]
-                slipped_state = (state[0] + slipped[0], state[1] + slipped[1])
+                # slipped_state = (state[0] + slipped[0],
+                #                  state[1] + slipped[1])
+                # added depth to the state
+                slipped_state = (state[0] + slipped[0],
+                                 state[1] + slipped[1], state[2] + 1)
                 if self.state_valid(slipped_state):
                     newstates.append(
-                        (slipped_state, (1 - self.icy_move_forward_prob) / 2))
+                        [slipped_state, (1 - self.icy_move_forward_prob) / 2])
         else:
-            newstates.append((intended_new_state, 1.0))
+            newstates.append([intended_new_state, 1.0])
+
+        # Need to normalize probabilities for cases where slip only goes to one
+        # cell, not two possible cells
+        sum_probs = sum(n for _, n in newstates)
+        for child in newstates:
+            child[1] = child[1] / sum_probs
+
         return newstates
 
     def observations(self, state):
@@ -94,24 +123,27 @@ class R2D2Model(object):
                 return dist
 
     def state_risk(self, state):
-        for fire in self.fires:
-            if state == fire:
-                return 1.0
+        if self.in_a_fire(state):
+            return 1.0
         return 0.0
 
     def costs(self, action):
         if action[2] == "up":
-            return 1 # bias up action 
+            return 2  # bias against up action, models climbing above ice as harder
         else:
             return 1
 
     def values(self, state, action):
         # return value (heuristic + cost)
-   		return self.costs(action) + self.heuristic(state)
+        # return self.costs(action)
+        return self.costs(action) + self.heuristic(state)
 
     def heuristic(self, state):
         # square of euclidean distance as heuristic
-        return sum([(self.goal[i] - state[i])**2 for i in range(2)])
+        # mdeyo: found this issue! We are trying to minimize the values so the
+        # heuristic should be an underestimate,which the square of distance is
+        # not if each action then cost 1 or 2
+        return np.sqrt(sum([(self.goal[i] - state[i])**2 for i in range(2)]))
 
     def execution_risk_heuristic(self, state):
         # sqaure of euclidean distance to fire as heuristic
@@ -145,6 +177,8 @@ class R2D2Model(object):
         policy_map = np.zeros([height, width])
 
         for key in policy:
+            print(key)
+            print(policy[key])
             coords = key.split(":")[0].split("(")[1].split(")")[0]
             col = int(coords.split(",")[0])
             row = int(coords.split(",")[1])
@@ -153,6 +187,7 @@ class R2D2Model(object):
                 if action_name in action_string:
                     policy_map[col][row] = self.action_map[action_name]
                     break
+        print(policy_map)
         print(" ")
         print("         ** Policy **")
         for j in range(height):
@@ -175,5 +210,5 @@ class R2D2Model(object):
                     if policy_map[j][i] == 8:
                         row_str += " [ vv ] "
                     if policy_map[j][i] == 0:
-                    	row_str += " [    ] "
+                        row_str += " [    ] "
             print(row_str)

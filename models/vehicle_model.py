@@ -7,8 +7,8 @@
 import numpy as np
 
 
-class VehicleModel(object):
-    '''First Python version of Geordi vehicle model, this one for intersections.
+class GeordiModel(object):
+    '''First Python version of Geordi vehicles model, this one for intersections.
 
     Attributes:
         name (str): Name to id each vehicle.
@@ -18,11 +18,38 @@ class VehicleModel(object):
 
     '''
 
-    def __init__(self, name, initial_state, model_action_list=[], isControllable=False, speed_limits=[0, 10], DetermObs=True):
+    def __init__(self, vehicle_models=[]):
+        print('Made GeordiModel! 2.0')
+        self.vehicle_models = {}
+        for i in vehicle_models:
+            self.vehicle_models[i.name] = i
+            print(i)
+
+    def add_vehicle_model(self, vehicle_model):
+        new_name = vehicle_model.name
+        if new_name not in self.vehicle_models:
+            self.vehicle_models[new_name] = vehicle_model
+        else:
+            raise ValueError(
+                'GeordiModel already has VehicleModel: ' + new_name)
+
+
+class VehicleModel(object):
+    '''Individual vehicle model, this one for intersections.
+
+    Attributes:
+        name (str): Name to id each vehicle.
+        current_state (dictionary): Maps variables to values for current state
+            of the vehicle. Starts with initial state and is used during execution.
+        attr2 (:obj:`int`, optional): Description of `attr2`.
+
+    '''
+
+    def __init__(self, name, initial_state, model_action_list=None, isControllable=False, speed_limits=[0, 10], DetermObs=True):
         self.name = name
         self.current_state = initial_state
         self.speed_limits = speed_limits
-        self.action_list = model_action_list
+        self.action_list = model_action_list or []
 
     def add_action(self, action_model):
         for action in self.action_list:
