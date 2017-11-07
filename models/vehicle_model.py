@@ -1,44 +1,91 @@
 #!/usr/bin/env python
 
-# author: Yun Chang
-# email: yunchang@mit.edu
-# r2d2 model as simple model to test rao star
+# author: Matt Deyo
+# email: mdeyo@mit.edu
+# simple vehicle models based on MERS Toyota work for rao star
 
 import numpy as np
 
 
-class R2D2Model(object):
-    # noted there are 7 blocks total, A through G
-    # G is the goal, F is fire
-    def __init__(self, icy_blocks, DetermObs=True):
-        # icy blocks are defined blocks that are icy
-        self.icy_blocks = icy_blocks
-        self.icy_blocks_lookup = {}
-        for icy in icy_blocks:
-            self.icy_blocks_lookup[icy] = 1
-        self.icy_move_forward_prob = 0.8
-        self.DetermObs = DetermObs
-        # if observation deterministic or not. If determinstic, once move,
-        # no excatly where it is. If not, P(o_k+1|s_k+1) = 0.6 for the cell
-        # it actually is in and 0.1 for the neighborinf cells
-        if not self.DetermObs:
-            self.obsProb = 0.6
-        # environment will be represented as a 3 x 3 grid, with (2,0) and (2,2) blocked
-        # top left corner of grid is (0,0) and first index is row
-        self.env = np.zeros([3, 3])
-        self.env[2, 0] = 1
-        self.env[2, 2] = 1
-        # fire located at self.env[2,1]: terminal
-        self.fires = [(2, 1)]
-        self.goal = (1, 2)  # goal position
-        self.optimization = 'minimize'  # want to minimize the steps to goal
-        self.action_map = {
-            "right": 5,
-            "left": 6,
-            "up": 7,
-            "down": 8
-        }
+class GeordiModel(object):
+    '''First Python version of Geordi vehicles model, this one for intersections.
 
+    Attributes:
+        name (str): Name to id each vehicle.
+        current_state (dictionary): Maps variables to values for current state
+            of the vehicle. Starts with initial state and is used during execution.
+        attr2 (:obj:`int`, optional): Description of `attr2`.
+
+    '''
+
+    def __init__(self, vehicle_models=[]):
+        print('Made GeordiModel! 2.0')
+        self.vehicle_models = {}
+        for i in vehicle_models:
+            self.vehicle_models[i.name] = i
+            print(i)
+
+    def add_vehicle_model(self, vehicle_model):
+        new_name = vehicle_model.name
+        if new_name not in self.vehicle_models:
+            self.vehicle_models[new_name] = vehicle_model
+        else:
+            raise ValueError(
+                'GeordiModel already has VehicleModel: ' + new_name)
+
+
+class VehicleModel(object):
+    '''Individual vehicle model, this one for intersections.
+
+    Attributes:
+        name (str): Name to id each vehicle.
+        current_state (dictionary): Maps variables to values for current state
+            of the vehicle. Starts with initial state and is used during execution.
+        attr2 (:obj:`int`, optional): Description of `attr2`.
+
+    '''
+
+    def __init__(self, name, initial_state, model_action_list=None, isControllable=False, speed_limits=[0, 10], DetermObs=True):
+        self.name = name
+        self.current_state = initial_state
+        self.speed_limits = speed_limits
+        self.action_list = model_action_list or []
+
+    def add_action(self, action_model):
+        for action in self.action_list:
+            if action.name == action_model.name:
+                print('VehicleModel: ' + self.name +
+                      ' already has action named: ' + action.name)
+                return False
+        action_model.agent_name = self.name
+        self.action_list.append(action_model)
+        return True
+
+    def __repr__(self):
+        return "VehicleModel: " + self.name + " " + str(self.current_state)
+
+
+class ActionModel(object):
+    """Model for each vehicle action with preconditions and effects functions.
+
+    Attributes:
+        name (str): Name to id each vehicle.
+        current_state (dictionary): Maps variables to values for current state
+            of the vehicle. Starts with initial state and is used during execution.
+        attr2 (:obj:`int`, optional): Description of `attr2`.
+    """
+
+    def __init__(self, name, precondition_check=lambda x: False, effect_function=lambda x: x, action_cost=1):
+        self.name = name
+        self.precondition_check = precondition_check
+        self.effect_function = effect_function
+        self.cost = action_cost
+        self.agent_name = "unassigned"
+
+    def __repr__(self):
+        return "ActionModel: " + self.name
+
+    '''
     def state_valid(self, state):  # check if a particular state is valid
         if state[0] < 0 or state[1] < 0:
             return False
@@ -101,13 +148,13 @@ class R2D2Model(object):
 
     def costs(self, action):
         if action[2] == "up":
-            return 1 # bias up action 
+            return 1  # bias up action
         else:
             return 1
 
     def values(self, state, action):
         # return value (heuristic + cost)
-   		return self.costs(action) + self.heuristic(state)
+        return self.costs(action) + self.heuristic(state)
 
     def heuristic(self, state):
         # square of euclidean distance as heuristic
@@ -175,5 +222,6 @@ class R2D2Model(object):
                     if policy_map[j][i] == 8:
                         row_str += " [ vv ] "
                     if policy_map[j][i] == 0:
-                    	row_str += " [    ] "
+                        row_str += " [    ] "
             print(row_str)
+    '''
