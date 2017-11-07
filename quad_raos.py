@@ -26,3 +26,9 @@ for i in P:
 print(P_notNone)
 
 # print out the policy for each state of guest 
+
+class state(object):
+	def __init__(self, state_str):
+		states = key.split(":")[0].split("(")[1].split(")")[0]
+		quadstate = tuple(states.split(",")[0])
+		gueststate = tuple(states.split(",")[1])
