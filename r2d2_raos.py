@@ -11,12 +11,15 @@ from raostar import RAOStar
 
 ice_blocks = [(1, 0), (1, 1)]
 model = R2D2Model(ice_blocks)
-algo = RAOStar(model, cc=0.12)
+algo = RAOStar(model, cc=0.08)
 
-b_init = {(1, 0): 1.0}
+b_init = {(1, 0, 0): 1.0}
 
 P, G = algo.search(b_init)
 # print(P)
 
 model.print_model()
 model.print_policy(P)
+
+for n in G.nodes.values():
+	n.print_node()

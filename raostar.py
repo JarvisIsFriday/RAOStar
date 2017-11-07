@@ -135,7 +135,7 @@ class RAOStar(object):
             node.terminal = False  # new node is non terminal
             node.best_action = None  # no action associated yet
             node.exec_risk_bound = bound_prob(er_bound)  # execution risk bound
-            node.exec_risk = node.risk  # avg heuristic estimate of execution risk at node
+            node.set_exec_risk(node.risk)  # avg heuristic estimate of execution risk at node
 
     def set_terminal_node(self, node):
         # set fields of a terminal node
@@ -301,10 +301,8 @@ class RAOStar(object):
                     # compute an estimate of the er of taking this action from current node.
                     # composed of the current risk and the avg execution risk
                     # of its children
-                    exec_risk = risk + \
-                        (1.0 - risk) * \
-                        np.sum([p * child.exec_risk for (p, child)
-                                in zip(prob_safe, children)])
+                    exec_risk = risk + (1.0 - risk)*np.sum([p * child.exec_risk for (p, child) \
+                    	in zip(prob_safe, children)])
                     # if execution risk bound has been violated or if Q value for this action is worse
                     # than current best, we should definitely no select it.
                     if (exec_risk > er_bound) or self.is_worse(Q, best_Q):

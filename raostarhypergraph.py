@@ -118,13 +118,13 @@ class RAOStarGraphNode(GraphElement):
 
     def set_exec_risk(self, new_exec_risk):
         if new_exec_risk >= 0.0 and new_exec_risk <= 1.0:
-            self.e_risk = new_exec_risk
+            self.exec_risk = new_exec_risk
         else:
             raise ValueError('Invalid execution risk: %f' % (new_exec_risk))
 
     def set_exec_risk_bound(self, new_exec_risk_bound):
         if new_exec_risk_bound >= 0.0 and new_exec_risk_bound <= 1.0:
-            self.e_risk_bound = new_exec_risk_bound
+            self.exec_risk_bound = new_exec_risk_bound
         else:
             raise ValueError('Invalid execution risk bound: %f' %
                              (new_exec_risk_bound))
