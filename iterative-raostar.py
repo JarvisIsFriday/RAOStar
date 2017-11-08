@@ -13,6 +13,7 @@ model = R2D2Model(ice_blocks)
 algo = RAOStar(model, cc=0.09)
 b_init = {(1, 0, 0): 1.0}
 P, G = algo.search(b_init)
+
 model.print_model()
 model.print_policy(P)
 
