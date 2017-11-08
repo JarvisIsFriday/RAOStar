@@ -178,13 +178,10 @@ class R2D2Model(object):
         depth_found = {}
 
         for key in policy:
-            print(key)
-            print(policy[key])
             coords = key.split(":")[0].split("(")[1].split(")")[0]
             col = int(coords.split(",")[0])
             row = int(coords.split(",")[1])
             depth = int(coords.split(",")[2])
-            print(depth)
             col_row_str = str(col) + ',' + str(row)
 
             action_string = policy[key]
@@ -198,7 +195,6 @@ class R2D2Model(object):
                         depth_found[col_row_str] = depth
                         policy_map[col][row] = self.action_map[action_name]
                         break
-        print(policy_map)
         print(" ")
         print("         ** Policy **")
         for j in range(height):
