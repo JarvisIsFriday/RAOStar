@@ -61,6 +61,8 @@ class QuadModel(object):
 			angle = int(action[10:])
 			newAng = int(quadState[2] + angle) % 360 
 			newquadState = (quadState[0], quadState[1], newAng)
+		else: 
+			newquadState = quadState
 		guestDir = self.angle_mapping[guestState[2]]
 		# 50 % chance of moving forward 
 		newguestState = (guestState[0] + guestDir[0], guestState[1] + guestDir[1], guestState[2])
@@ -70,7 +72,7 @@ class QuadModel(object):
 		return [(state, 1.0)] # assume observations is deterministic 
 
 	def state_risk(self, state):
-		if state[0] == state[1]:
+		if (state[0][0], state[0][1]) == (state[1][0], state[1][1]):
 			return 1.0
 		elif state[0][0] == 0 or state[0][1] == 0 \
 					or state[0][0] == self.envSize[0]-1 or state[0][1] == self.envSize[1]-1:
