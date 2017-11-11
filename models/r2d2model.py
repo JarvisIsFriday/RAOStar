@@ -175,19 +175,26 @@ class R2D2Model(object):
     def print_policy(self, policy):
         height, width = self.env.shape
         policy_map = np.zeros([height, width])
+        depth_found = {}
 
         for key in policy:
-            print(key)
-            print(policy[key])
             coords = key.split(":")[0].split("(")[1].split(")")[0]
             col = int(coords.split(",")[0])
             row = int(coords.split(",")[1])
+            depth = int(coords.split(",")[2])
+            col_row_str = str(col) + ',' + str(row)
+
             action_string = policy[key]
             for action_name in self.action_map:
                 if action_name in action_string:
-                    policy_map[col][row] = self.action_map[action_name]
-                    break
-        print(policy_map)
+                    if col_row_str not in depth_found:  # first depth found
+                        depth_found[col_row_str] = depth
+                        policy_map[col][row] = self.action_map[action_name]
+                        break
+                    elif depth < depth_found[col_row_str]:
+                        depth_found[col_row_str] = depth
+                        policy_map[col][row] = self.action_map[action_name]
+                        break
         print(" ")
         print("         ** Policy **")
         for j in range(height):
