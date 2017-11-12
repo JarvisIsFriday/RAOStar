@@ -157,18 +157,17 @@ class RAOStar(object):
         expanded = []  # not to be mistaken with the expanded list used in dynamic programming
         # simply keep track of the nodes we have expanded before so it doesn't loop forever
         # print(n.)
-        print("======================")
         # print(queue)
         while len(queue) > 0:
             node = queue.popleft()
-            print(node.name)
+            # print(node.name)
             # visited.append(node)
             if node.best_action != None:  # node already has a best action
                 expanded.append(node)
                 children = self.graph.hyperedge_successors(
                     node, node.best_action)
-                print("children risk bound")
-                print([c.exec_risk_bound for c in children])
+                # print("children risk bound")
+                # print([c.exec_risk_bound for c in children])
                 for n in children:
                     if n not in expanded:
                         queue.append(n)
@@ -319,8 +318,8 @@ class RAOStar(object):
                         if not cc_infeasible:  # if chance constraint has not been violated
                             for idx, child in enumerate(children):
                                 child.exec_risk_bound = child_er_bounds[idx]
-                                print(child.name + " depth: " + str(child.depth) + " risk bound: " +
-                                      str(child.exec_risk_bound))
+                                # print(child.name + " depth: " + str(child.depth) + " risk bound: " +
+                                #       str(child.exec_risk_bound))
 
                             # Updates the best action at node
                             best_Q = Q

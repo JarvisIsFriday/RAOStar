@@ -26,7 +26,7 @@ class QuadModel(object):
 		self.envSize = world_size
 		# environment size (x,y)
 		# model walls as risks 
-		self.goal = goalCoord
+		self.goal = goalCoord # goal specify direction as well as coordinate (x,y,thet)
 		self.optimization = "minimize"
 		self.angle_mapping = {0:[1,0],45:[1,1],90:[0,1],135:[-1,1],180:[-1,0], \
 								225:[-1,-1],270:[0,-1],315:[1,-1]}
@@ -83,7 +83,7 @@ class QuadModel(object):
 		if action == "turn-right-45" or action == "turn-left-45":
 			return 2 # bias in going forward 
 		else:
-			return 1
+			return 1.5
 
 	def values(self, state, action):
 		# return value (heuristic + cost)
@@ -91,7 +91,7 @@ class QuadModel(object):
 
 	def heuristic(self, state):
 		# square of euclidean distance as heuristic
-		return sum([(self.goal[i] - state[0][i])**2 for i in range(2)])
+		return np.sqrt(sum([(self.goal[i] - state[0][i])**2 for i in range(2)]))
 
 	def execution_risk_heuristic(self, state):
 		return 0 # don't have a good heuristic for this yet 

@@ -17,7 +17,7 @@ import numpy as np
 #### Run RAO star on Scenario ####
 # Simulation conditions 
 world_size = (7,7) # note the boundaries are walls 
-goal_state = (5,5)
+goal_state = (5,5,90)
 quad_init = (1,1,90) # (x,y,theta)
 guest_init = (3,1,90)
 
