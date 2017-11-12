@@ -11,7 +11,7 @@ from raostar import RAOStar
 
 ice_blocks = [(1, 0), (1, 1)]
 model = R2D2Model(ice_blocks)
-algo = RAOStar(model, cc=0.1)
+algo = RAOStar(model, cc=0.08)
 
 b_init = {(1, 0, 0): 1.0}
 

@@ -74,7 +74,7 @@ class QuadModel(object):
 		return [(state, 1.0)] # assume observations is deterministic 
 
 	def state_risk(self, state):
-		if (state[0][0], state[0][1]) == (state[1][0], state[1][1]):
+		if (state[0][0], state[0][1], state[0][3]) == (state[1][0], state[1][1], state[1][3]):
 			return 1.0
 		elif state[0][0] == 0 or state[0][1] == 0 \
 					or state[0][0] == self.envSize[0]-1 or state[0][1] == self.envSize[1]-1:
