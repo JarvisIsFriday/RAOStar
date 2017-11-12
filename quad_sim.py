@@ -41,7 +41,7 @@ class Simulator(object):
 		return True 
 
 	def draw_quad(self, pose): # represent quad as triangle 
-		(posx, posy, postheta) = pose
+		(posx, posy, postheta, t) = pose
 		x = posx*self.gs + posx  + int(self.gs/2) # find corresponding pixel value 
 		y = self.h - (posy*self.gs + posy + int(self.gs/2)) # fo
 		thet = postheta/360.*2*np.pi
@@ -55,7 +55,7 @@ class Simulator(object):
 		return True
 
 	def move_quad(self, pose): 
-		(posx, posy, postheta) = pose
+		(posx, posy, postheta, t) = pose
 		x = posx*self.gs + posx  + int(self.gs/2) # find corresponding pixel value 
 		y = self.h - (posy*self.gs + posy + int(self.gs/2)) # fo
 		thet = postheta/360.*2*np.pi
@@ -67,7 +67,7 @@ class Simulator(object):
 		self.C.coords(self.quad_poly, (x1, y1, x2, y2, x3, y3))
 
 	def draw_guest(self, pose): # ind corresponding pixel value 
-		(posx, posy, postheta) = pose # draw the guest 
+		(posx, posy, postheta, t) = pose # draw the guest 
 		x = posx*self.gs + posx  + int(self.gs/2) # f
 		y = self.h - (posy*self.gs + posy + int(self.gs/2)) # fo
 		thet = postheta/360.*2*np.pi
@@ -81,7 +81,7 @@ class Simulator(object):
 		return True
 
 	def move_guest(self, pose): 
-		(posx, posy, postheta) = pose
+		(posx, posy, postheta, t) = pose
 		x = posx*self.gs + posx  + int(self.gs/2) # find corresponding pixel value 
 		y = self.h - (posy*self.gs + posy + int(self.gs/2)) # fo
 		thet = postheta/360.*2*np.pi

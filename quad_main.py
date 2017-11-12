@@ -18,8 +18,8 @@ import numpy as np
 # Simulation conditions 
 world_size = (7,7) # note the boundaries are walls 
 goal_state = (5,5,90)
-quad_init = (1,1,90) # (x,y,theta)
-guest_init = (3,1,90)
+quad_init = (3,1,90,0) # (x,y,theta,t)
+guest_init = (1,1,90,0)
 
 ### Plce state string in nicer format
 def get_state_from_string(state_string):
@@ -52,7 +52,7 @@ def get_state_from_string(state_string):
 # note the boundary of the world (ex anything with row column 0 and the upper bound)
 # is the wall
 model = QuadModel(world_size, goal_state)
-algo = RAOStar(model, cc=0.005)
+algo = RAOStar(model, cc=1.0)
 
 b_init = {(quad_init, guest_init): 1.0} # initialize belief state 
 
@@ -71,14 +71,3 @@ S.draw_grid()
 S.draw_quad(quad_init)
 S.draw_guest(guest_init)
 S.done()
-# D = draw.Display(world_size[0], world_size[1]) # create display 
-# D.draw_grid()
-# while (current_state[0][0], current_state[0][1]) != goal_state: # main loop 
-# 	D.draw_quad(current_state[0])
-# 	D.draw_guest(current_state[1])
-# 	policy = sorted_policy[current_state[0]][current_state[1]]
-# 	guest_forward = np.random.randint(2) # stochastically display whether guest moves forward 
-# 	newstate = model.state_transitions(current_state, policy)[guest_forward]
-# 	current_state = newstate[0]
-# 	D.loop()
-
