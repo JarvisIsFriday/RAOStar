@@ -28,6 +28,7 @@ class Ashkan_ICAPS_Model(object):
         # model walls as risks
         # goal specify direction as well as coordinate (x,y,thet)
         self.goal_area = [8, 8]
+        self.goal_area = [5, 5]
 
         # now trying goal is just hitting x coord
         self.goal_x = 5
@@ -87,7 +88,7 @@ class Ashkan_ICAPS_Model(object):
         # print('h state', state)
         # distance_to_goal_corner = np.sqrt((state.mean_b[0] - self.goal_x)**2)
         distance_to_goal_corner = np.sqrt(
-            (state.mean_b[0] - self.goal_area[0] + 2)**2 + (state.mean_b[1] - self.goal_area[1] + 2)**2)
+            (state.mean_b[0] - self.goal_area[0] - 2)**2 + (state.mean_b[1] - self.goal_area[1] - 2)**2)
         return distance_to_goal_corner
         # return np.sqrt(sum([(self.goal[i] - state[0][i])**2 for i in
         # range(2)]))

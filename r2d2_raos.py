@@ -19,7 +19,7 @@ model2 = Ashkan_ICAPS_Model()
 algo = RAOStar(model2, cc=0.8, ashkan_continuous=True)
 
 b_init = {(1, 0, 0): 1.0}
-b0 = ContinuousBeliefState(1, 1)
+b0 = ContinuousBeliefState(0, 0)
 # P, G = algo.search(b_init)
 P, G = algo.search(b0)
 

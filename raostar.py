@@ -449,6 +449,8 @@ class RAOStar(object):
                     # than current best, we should definitely not select it.
                     if (exec_risk > er_bound) or self.is_worse(Q, best_Q):
                         select_action = False
+                        if(exec_risk > er_bound):
+                            pritn(' Action pruned by risk bound')
                     # if risk bound respected and Q value is equal or better
                     else:
                         select_action = True
