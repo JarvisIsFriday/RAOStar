@@ -7,6 +7,11 @@
 from utils import import_models
 import_models()
 from vehicle_model import *
+from geordi_road_model import *
+
+road_model = highway_2_lanes_offramp_ex()
+print(road_model)
+plot_road_model(road_model)
 
 ego_vehicle = VehicleModel(
     "ego", {'road': 'one', 'x': 0, 'y': 0, 'v': 0, 'theta': 0})
