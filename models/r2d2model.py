@@ -50,6 +50,7 @@ class R2D2Model(object):
             return False
 
     def in_a_fire(self, state):
+        print(state)
         for fire in self.fires:
             if state[0] == fire[0] and state[1] == fire[1]:
                 return True
