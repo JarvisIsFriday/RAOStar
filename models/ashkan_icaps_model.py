@@ -27,7 +27,7 @@ class Ashkan_ICAPS_Model(object):
         # environment size (x,y)
         # model walls as risks
         # goal specify direction as well as coordinate (x,y,thet)
-        self.goal_area = [8, 0]
+        self.goal_area = [8, 8]
 
         # now trying goal is just hitting x coord
         self.goal_x = 5
@@ -39,14 +39,13 @@ class Ashkan_ICAPS_Model(object):
         Available ego actions not dependent on state.
         Not limiting the ego to stay without bounds.
         '''
-        return [['RIGHT', self.vel, 0], ['UP-RIGHT', self.vel, self.vel], ['UP', 0, self.vel], ['UP-LEFT', -self.vel, self.vel], ['LEFT', -self.vel, 0]]
+        diag_factor = 1 / np.sqrt(2)
+        return [['RIGHT', self.vel, 0], ['UP-RIGHT', self.vel * diag_factor, self.vel * diag_factor], ['UP', 0, self.vel], ['UP-LEFT', -self.vel * diag_factor, self.vel * diag_factor], ['LEFT', -self.vel, 0]]
 
     def is_terminal(self, state):
         # print('is_terminal', state)
-        # return(state.mean_b[0] > self.goal_area[0] and state.mean_b[1] >
-        # self.goal_area[1])
-        return(state.mean_b[0] > self.goal_x)
-        # return (state[0][0] == self.goal[0] and state[0][1] == self.goal[1])
+        return(state.mean_b[0] > self.goal_area[0] and state.mean_b[1] > self.goal_area[1])
+        # return(state.mean_b[0] > self.goal_x)
 
     def state_transitions(self, state, action):
         '''The uncontollable agent obstacle can move left [-1,0] or right [1,0]
@@ -65,18 +64,19 @@ class Ashkan_ICAPS_Model(object):
 
     def state_risk(self, state):
         risk = static_obs_risk(state)
-        print('state_risk:' + str(risk) + '\n' + str(state.mean_b))
+        print('state_risk:' + "{0:.2f}".format(risk) + str(state))
         return risk
 
     def costs(self, action):
         '''
         Treating all ego actions as uniform cost, not trying to guide behavior
         '''
-        return 1
+        return 2
 
     def values(self, state, action):
         # return value (heuristic + cost)
-        return self.costs(action) + self.heuristic(state)
+        return self.costs(action)
+        # return self.costs(action) + self.heuristic(state)
 
     def heuristic(self, state):
         # square of euclidean distance as heuristic
@@ -85,9 +85,9 @@ class Ashkan_ICAPS_Model(object):
         else:
             state = state.state
         # print('h state', state)
-        distance_to_goal_corner = np.sqrt((state.mean_b[0] - self.goal_x)**2)
-        # distance_to_goal_corner = np.sqrt(
-        #     (state.mean_b[0] - self.goal_area[0] + 2)**2 + (state.mean_b[1] - self.goal_area[1] + 2)**2)
+        # distance_to_goal_corner = np.sqrt((state.mean_b[0] - self.goal_x)**2)
+        distance_to_goal_corner = np.sqrt(
+            (state.mean_b[0] - self.goal_area[0] + 2)**2 + (state.mean_b[1] - self.goal_area[1] + 2)**2)
         return distance_to_goal_corner
         # return np.sqrt(sum([(self.goal[i] - state[0][i])**2 for i in
         # range(2)]))

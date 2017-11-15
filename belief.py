@@ -85,6 +85,9 @@ class ContinuousBeliefState(object):
     def __len__(self):
         return 7
 
+    def state_print(self):
+        return "ContBeliefState x:" + "{0:.2f}".format(float(self.mean_b[0])) + " y:" + "{0:.2f}".format(float(self.mean_b[1]))
+
     def copy(self):
         '''Return a copy of the this belief_state as a new object'''
         new_belief_state = ContinuousBeliefState()
@@ -188,6 +191,9 @@ class BeliefState(object):
 
     def __init__(self, belief_dict, decimals=5):
         self.belief = belief_dict
+
+    def __repr__(self):
+        return "BeliefState " + str(self.belief)
 
     @property
     def belief(self):

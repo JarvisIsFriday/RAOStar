@@ -38,6 +38,8 @@ class RAOStar(object):
         # whether constraint violations is terminal
         self.continuous_belief = ashkan_continuous
 
+        print("halting", self.halt_on_violation)
+
         # execution risk cap
         if self.cc_type.lower() in ['overall', 'o']:
             self.er_cap = 1.0
@@ -87,8 +89,9 @@ class RAOStar(object):
         interrupted = False
         while len(self.opennodes) > 0 and (count <= iter_limit) and (time.time() - self.start_time <= time_limit):
             count += 1
+            print('\n\n\n RAO* iteration: ' + str(count) + '\n\n\n')
+
             expanded_nodes = self.expand_best_partial_solution()
-            print('\n\n\n Got to here \n\n\n')
             self.update_values_and_best_actions(expanded_nodes)
             # best actions aka policy
             # Updates the mapping of ancestors on the best policy graph and the
@@ -117,7 +120,7 @@ class RAOStar(object):
                 name=str(b0), value=None, state=BeliefState(b0))
         self.set_new_node(start_node, 0, self.cc)
         print('root node:')
-        print(start_node.name + " risk bound: " +
+        print(start_node.state.state_print() + " risk bound: " +
               str(start_node.exec_risk_bound))
         self.graph.add_node(start_node)
         self.graph.set_root(start_node)
@@ -193,7 +196,7 @@ class RAOStar(object):
         # print(queue)
         while len(queue) > 0:
             node = queue.popleft()
-            print(node.state.mean_b)
+            print(str(node.state.state_print()) + '\n')
             # visited.append(node)
             if node.best_action != None:  # node already has a best action
                 print(node.best_action.name)
@@ -313,7 +316,7 @@ class RAOStar(object):
 
         for node in nodes_to_expand:
             print('\n******* expanding node *******')
-            print(node.state.mean_b)
+            print(node.state)
             print('******************************\n')
             belief = node.state.belief  # belief state associated to the node
             parent_risk = node.risk  # execution risk for current node
@@ -341,8 +344,7 @@ class RAOStar(object):
                                                                                                                      self.T, self.O, self.r, act)
 
                     # print(belief, act)
-                    print(child_obj_list, prob_list,
-                          prob_safe_list, new_child_idxs)
+                    # print(child_obj_list, prob_list,prob_safe_list, new_child_idxs)
                     # raise ValueError()
 
                     # initializes the new child nodes
@@ -395,6 +397,10 @@ class RAOStar(object):
             Z = self.build_ancestor_list(exp_node)
             # updates the best action at the node
             for node in Z:
+                print('\n  update values and best action: ' +
+                      str(node.state.state_print()))
+                print('current Q: ' + str(node.value))
+
                 # all actions available at that node
                 all_action_operators = [
                 ] if node.terminal else self.graph.all_node_operators(node)
@@ -433,13 +439,16 @@ class RAOStar(object):
                     # of its children
                     exec_risk = risk + (1.0 - risk) * np.sum([p * child.exec_risk for (p, child)
                                                               in zip(prob_safe, children)])
+                    print('action: ' + act.name + ' children: ' + str(children[0].state.state_print()) +
+                          ' risk ' + str(exec_risk))
+                    print('act_op_value: ' + str(act.op_value) +
+                          ' child_value: ' + str(children[0].value))
+                    print('child Q: ' + str(Q))
+
                     # if execution risk bound has been violated or if Q value for this action is worse
                     # than current best, we should definitely not select it.
                     if (exec_risk > er_bound) or self.is_worse(Q, best_Q):
                         select_action = False
-                        # print('cannot select action at state: ',
-#       node.state.mean_b)
-
                     # if risk bound respected and Q value is equal or better
                     else:
                         select_action = True
@@ -449,10 +458,11 @@ class RAOStar(object):
                         # Updates the execution risk bounds for the children
                         child_er_bounds, cc_infeasible = self.compute_exec_risk_bounds(
                             er_bound, risk, children, prob_safe)
+                        print('node ' + str(node.state.state_print()) + ' child ' + child.state.state_print() + " depth: " + str(child.depth) +
+                              " risk bound: " + str(child.exec_risk_bound) + ' infeasible: ' + str(cc_infeasible))
                         if not cc_infeasible:  # if chance constraint has not been violated
                             for idx, child in enumerate(children):
                                 child.exec_risk_bound = child_er_bounds[idx]
-                                # print(child.name + " depth: " + str(child.depth) + " risk bound: " +str(child.exec_risk_bound))
 
                             # Updates the best action at node
                             best_Q = Q
@@ -470,7 +480,11 @@ class RAOStar(object):
                     node.set_value(best_Q)
                     node.set_exec_risk(exec_risk_for_best)
                     node.set_best_action(all_action_operators[best_action_idx])
+                    print('best action for ' + str(node.state.state_print()) + ' set as ' +
+                          str(all_action_operators[best_action_idx].name))
                 else:  # no action was selected, so this node is terminal
+                    print(' no best action for ' +
+                          str(node.state.state_print()))
                     if not node.terminal:
                         self.set_terminal_node(node)
 
@@ -598,6 +612,10 @@ class RAOStar(object):
                 name=str(child_blf_state), value=None, state=child_blf_state)
             if self.graph.has_node(candidate_child_obj):  # if node already present
                 child_obj = self.graph.nodes[candidate_child_obj.name]
+                print(child_blf_state.state_print())
+                print(candidate_child_obj.name)
+                print(
+                    '********************  search node already present  ***************')
             else:
                 # the node initiated
                 child_obj = candidate_child_obj

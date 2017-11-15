@@ -16,7 +16,7 @@ ice_blocks = [(1, 0), (1, 1)]
 model = R2D2Model(ice_blocks)
 model2 = Ashkan_ICAPS_Model()
 # algo = RAOStar(model, cc=0.08)
-algo = RAOStar(model2, cc=0.9, ashkan_continuous=True)
+algo = RAOStar(model2, cc=0.8, ashkan_continuous=True)
 
 b_init = {(1, 0, 0): 1.0}
 b0 = ContinuousBeliefState(1, 1)
