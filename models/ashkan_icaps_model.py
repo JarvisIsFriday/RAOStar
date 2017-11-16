@@ -28,7 +28,7 @@ class Ashkan_ICAPS_Model(object):
         # model walls as risks
         # goal specify direction as well as coordinate (x,y,thet)
         self.goal_area = [8, 8]
-        self.goal_area = [5, 5]
+        # self.goal_area = [5, 5]
 
         # now trying goal is just hitting x coord
         self.goal_x = 5
@@ -44,7 +44,7 @@ class Ashkan_ICAPS_Model(object):
         return [['RIGHT', self.vel, 0], ['UP-RIGHT', self.vel * diag_factor, self.vel * diag_factor], ['UP', 0, self.vel], ['UP-LEFT', -self.vel * diag_factor, self.vel * diag_factor], ['LEFT', -self.vel, 0]]
 
     def is_terminal(self, state):
-        # print('is_terminal', state)
+        # print('is_terminal', state.state_print())
         return(state.mean_b[0] > self.goal_area[0] and state.mean_b[1] > self.goal_area[1])
         # return(state.mean_b[0] > self.goal_x)
 
@@ -52,7 +52,6 @@ class Ashkan_ICAPS_Model(object):
         '''The uncontollable agent obstacle can move left [-1,0] or right [1,0]
         each time step with equal probability'''
         new_states = []
-        # print(action)
         control_input = [[action[1]], [action[2]]]
         new_states.append(
             [cont_belief_update(state, control_input), 1.0])
@@ -65,7 +64,8 @@ class Ashkan_ICAPS_Model(object):
 
     def state_risk(self, state):
         risk = static_obs_risk(state)
-        print('state_risk:' + "{0:.2f}".format(risk) + str(state))
+        print('state_risk:' + str(state.state_print()) +
+              " {0:.2f}".format(risk))
         return risk
 
     def costs(self, action):

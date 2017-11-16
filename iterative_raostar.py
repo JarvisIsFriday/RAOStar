@@ -2,20 +2,21 @@ from utils import import_models
 import_models()
 from r2d2model import R2D2Model
 from raostar import RAOStar
+from belief import *
 
 ###############
 # This one should result in a policy of RIGHT at (1,1)
 # because cc = 0.09, and the 10% exec_risk at (1,1) is discounted
 # by the stochastic behavior of RIGHT at (1,0)
 ###############
-ice_blocks = [(1, 0), (1, 1)]
-model = R2D2Model(ice_blocks)
-algo = RAOStar(model, cc=0.09)
-b_init = {(1, 0, 0): 1.0}
-P, G = algo.search(b_init)
+# ice_blocks = [(1, 0), (1, 1)]
+# model = R2D2Model(ice_blocks)
+# algo = RAOStar(model, cc=0.09)
+# b_init = {(1, 0, 0): 1.0}
+# P, G = algo.search(b_init)
 
-model.print_model()
-model.print_policy(P)
+# model.print_model()
+# model.print_policy(P)
 
 
 # G.root.print_node()
@@ -23,6 +24,54 @@ model.print_policy(P)
 # for child in G.hyperedge_successors(G.root, G.root.best_action):
 # print(child.name)
 # print(G.root.best_action.properties)
+
+def clean_policy(P):
+    # Remove all the states from policy that did not have a best action
+    P_notNone = {}
+    for i in P:
+        if P[i] != 'None':
+            P_notNone[i] = P[i]
+
+    return P_notNone
+
+
+def next_child(G, state):
+    next_child = None
+    most_probable = 0
+    for i, child in enumerate(G.hyperedge_successors(state, state.best_action)):
+        prob_outcome = state.best_action.properties['prob'][i]
+        if prob_outcome > most_probable:
+            next_child = child
+            most_probable = prob_outcome
+    if state.best_action:
+        print("   action: " + str(state.best_action.name.split("'")[1]))
+        print("next state: " + str(next_child.state.state_print()))
+    else:
+        print('## Policy complete ##')
+    return next_child
+
+
+import copy
+
+
+def most_likely_policy(G, model):
+    print('\n## Policy start ##')
+    s = G.root
+    print('first state: ' + str(s.state.state_print()))
+    last_s = None
+    while s:
+        # print('loop', s)
+        last_s = copy.copy(s)
+        s = next_child(G, s)
+    print('\nfinal state: ' + str(last_s.state.state_print()))
+
+    final_state = last_s.state
+    if isinstance(last_s.state, BeliefState):
+        final_state = last_s.state.belief.keys()[0]
+    if model.is_terminal(final_state):
+        print('finished search!')
+    else:
+        print('Search Failed :(')
 
 
 def best_action_children(G, P, print_out=False):
@@ -64,11 +113,10 @@ def make_observation(state, G, P):
         print(new_state.best_action.properties)
 
 
-print("Next best action is: " + G.root.best_action.name)
-best_action_children(G, P, True)
-make_observation((1, 1), G, P)
-
-make_observation((2, 1), G, P)
+# print("Next best action is: " + G.root.best_action.name)
+# best_action_children(G, P, True)
+# make_observation((1, 1), G, P)
+# make_observation((2, 1), G, P)
 
 # test for when observed state is not valid child to the root node
 # make_observation((1, 0), G, P)

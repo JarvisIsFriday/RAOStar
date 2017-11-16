@@ -22,7 +22,7 @@ class RAOStar(object):
     # observable domains
 
     def __init__(self, model, cc=0.0, cc_type='o',
-                 terminal_prob=1.0, randomization=0.0, halt_on_violation=False, ashkan_continuous=False):
+                 terminal_prob=1.0, debugging=False, randomization=0.0, halt_on_violation=False, ashkan_continuous=False):
 
         self.model = model
         self.cc = cc
@@ -37,8 +37,9 @@ class RAOStar(object):
         self.halt_on_violation = halt_on_violation
         # whether constraint violations is terminal
         self.continuous_belief = ashkan_continuous
+        self.debugging = debugging
 
-        print("halting", self.halt_on_violation)
+        self.debug("halting", self.halt_on_violation)
 
         # execution risk cap
         if self.cc_type.lower() in ['overall', 'o']:
@@ -77,8 +78,16 @@ class RAOStar(object):
         self.e = model.execution_risk_heuristic
         self.term = model.is_terminal
 
+    def debug(self, *argv):
+        if self.debugging:
+            msg = ""
+            for item in argv:
+                msg += str(item)
+            print(msg)
+
     def search(self, b0, time_limit=np.inf, iter_limit=np.inf):
         self.start_time = time.time()
+        print('\n RAO* initialized with belief: ' + str(b0) + '\n .\n .\n .')
         self.init_search(b0)
         count = 0
         root = self.graph.root
@@ -89,7 +98,7 @@ class RAOStar(object):
         interrupted = False
         while len(self.opennodes) > 0 and (count <= iter_limit) and (time.time() - self.start_time <= time_limit):
             count += 1
-            print('\n\n\n RAO* iteration: ' + str(count) + '\n\n\n')
+            self.debug('\n\n\n RAO* iteration: ' + str(count) + '\n\n\n')
 
             expanded_nodes = self.expand_best_partial_solution()
             self.update_values_and_best_actions(expanded_nodes)
@@ -106,7 +115,10 @@ class RAOStar(object):
                     print('Warning: root value improved. Check admissibility')
                 else:
                     prev_root_val = root_value
+        print('\n RAO* finished planning in ' +
+              "{0:.2f}".format(time.time() - self.start_time) + " seconds\n")
         policy = self.extract_policy()
+
         return policy, self.graph
 
     def init_search(self, b0):
@@ -119,9 +131,9 @@ class RAOStar(object):
             start_node = RAOStarGraphNode(
                 name=str(b0), value=None, state=BeliefState(b0))
         self.set_new_node(start_node, 0, self.cc)
-        print('root node:')
-        print(start_node.state.state_print() + " risk bound: " +
-              str(start_node.exec_risk_bound))
+        self.debug('root node:')
+        self.debug(start_node.state.state_print() + " risk bound: " +
+                   str(start_node.exec_risk_bound))
         self.graph.add_node(start_node)
         self.graph.set_root(start_node)
         self.update_policy_open_nodes()
@@ -180,9 +192,9 @@ class RAOStar(object):
         # raise ValueError()
 
     def update_policy_open_nodes(self):
-        print('\n\n******* updating policy open nodes *******')
-        # print(node.state.mean_b)
-        # print('******************************\n')
+        self.debug('\n\n******* updating policy open nodes *******')
+        # self.debug(node.state.mean_b)
+        # self.debug('******************************\n')
         # traverse graph starting at root along marked actions, recording ancestors
         # and open nodes
         # starts at root and expands nodes with policy and
@@ -192,27 +204,28 @@ class RAOStar(object):
         self.opennodes = set()
         expanded = []  # not to be mistaken with the expanded list used in dynamic programming
         # simply keep track of the nodes we have expanded before so it doesn't loop forever
-        # print(n.)
-        # print(queue)
+        # self.debug(n.)
+        # self.debug(queue)
         while len(queue) > 0:
             node = queue.popleft()
-            print(str(node.state.state_print()) + '\n')
+            self.debug(node.state.state_print(), '\n')
             # visited.append(node)
             if node.best_action != None:  # node already has a best action
-                print(node.best_action.name)
+                self.debug(node.best_action.name)
                 expanded.append(node)
                 children = self.graph.hyperedge_successors(
                     node, node.best_action)
-                print("children risk bound")
-                print([c.exec_risk_bound for c in children])
+                self.debug("children risk bound")
+                self.debug([c.exec_risk_bound for c in children])
                 for n in children:
                     if n not in expanded:
                         queue.append(n)
             else:  # no best action has been assigned yet
                 if not node.terminal:
                     self.opennodes.add(node)
-                # print("opennodes")
-                # print([(n.name, n.exec_risk_bound) for n in self.opennodes])
+                # self.debug("opennodes")
+                # self.debug([(n.name, n.exec_risk_bound) for n in
+                # self.opennodes])
 
     def get_all_actions(self, belief, A):
         if self.continuous_belief:
@@ -238,9 +251,9 @@ class RAOStar(object):
         self.opennodes = None
 
         # node = self.choose_node()
-        # print('\n******* expanding node *******')
-        # print(node.state.mean_b)
-        # print('******************************\n')
+        # self.debug('\n******* expanding node *******')
+        # self.debug(node.state.mean_b)
+        # self.debug('******************************\n')
         # belief = node.state.belief  # belief state associated to the node
         # parent_risk = node.risk  # execution risk for current node
         # parent_bound = node.exec_risk_bound  # er bound for current node
@@ -253,12 +266,12 @@ class RAOStar(object):
         # else:
         #     all_node_actions = self.get_all_actions(belief, self.A)
         # action_added = False  # flag if a new action has been added
-        # # print('all node actions')
-        # # print(all_node_actions)
+        # # self.debug('all node actions')
+        # # self.debug(all_node_actions)
         # if len(all_node_actions) > 0:
         #     added_count = 0
         #     for act in all_node_actions:
-        #         print(act)
+        #         self.debug(act)
         #         if self.continuous_belief:
         #             child_obj_list, prob_list, prob_safe_list, new_child_idxs = self.obtain_continuous_child_and_probs(
         #                 belief, self.T, self.O, self.r, act)
@@ -266,8 +279,8 @@ class RAOStar(object):
         #             child_obj_list, prob_list, prob_safe_list, new_child_idxs = self.obtain_child_objs_and_probs(belief,
         #                                                                                                          self.T, self.O, self.r, act)
         #
-        #         # print(belief, act)
-        #         print(child_obj_list, prob_list,
+        #         # self.debug(belief, act)
+        #         self.debug(child_obj_list, prob_list,
         #               prob_safe_list, new_child_idxs)
         #         # raise ValueError()
         #
@@ -307,17 +320,17 @@ class RAOStar(object):
         #             action_added = True
         #             added_count += 1
         #         else:
-        #             print('action not added')
+        #             self.debug('action not added')
         # if not action_added:
-        #     # print('action not added')
+        #     # self.debug('action not added')
         #     self.set_terminal_node(node)
         # # returns the list of node either added actions to or marked terminal
         # return nodes_to_expand
 
         for node in nodes_to_expand:
-            print('\n******* expanding node *******')
-            print(node.state)
-            print('******************************\n')
+            self.debug('\n******* expanding node *******')
+            self.debug(node.state.state_print())
+            self.debug('******************************\n')
             belief = node.state.belief  # belief state associated to the node
             parent_risk = node.risk  # execution risk for current node
             parent_bound = node.exec_risk_bound  # er bound for current node
@@ -330,12 +343,12 @@ class RAOStar(object):
             else:
                 all_node_actions = self.get_all_actions(belief, self.A)
             action_added = False  # flag if a new action has been added
-            # print('all node actions')
-            # print(all_node_actions)
+            # self.debug('all node actions')
+            # self.debug(all_node_actions)
             if len(all_node_actions) > 0:
                 added_count = 0
                 for act in all_node_actions:
-                    print(act)
+                    self.debug(act)
                     if self.continuous_belief:
                         child_obj_list, prob_list, prob_safe_list, new_child_idxs = self.obtain_continuous_child_and_probs(
                             belief, self.T, self.O, self.r, act)
@@ -343,8 +356,8 @@ class RAOStar(object):
                         child_obj_list, prob_list, prob_safe_list, new_child_idxs = self.obtain_child_objs_and_probs(belief,
                                                                                                                      self.T, self.O, self.r, act)
 
-                    # print(belief, act)
-                    # print(child_obj_list, prob_list,prob_safe_list, new_child_idxs)
+                    # self.debug(belief, act)
+                    # self.debug(child_obj_list, prob_list,prob_safe_list, new_child_idxs)
                     # raise ValueError()
 
                     # initializes the new child nodes
@@ -360,6 +373,9 @@ class RAOStar(object):
                     else:
                         er_bounds = [1.0] * len(child_obj_list)
                         er_bound_infeasible = False
+
+                    self.debug('$$ error bound infeasible ' +
+                               str(er_bound_infeasible))
 
                     # Only creates new operator if all er bounds a non-negative
                     if not er_bound_infeasible:
@@ -383,9 +399,9 @@ class RAOStar(object):
                         action_added = True
                         added_count += 1
                     else:
-                        print('action not added')
+                        self.debug('action not added - error bound infeasible')
             if not action_added:
-                # print('action not added')
+                # self.debug('action not added')
                 self.set_terminal_node(node)
         # returns the list of node either added actions to or marked terminal
         return nodes_to_expand
@@ -393,13 +409,17 @@ class RAOStar(object):
     def update_values_and_best_actions(self, expanded_nodes):
         # updates the Q values on nodes on the graph and the current best policy
         # for each expanded node at a time
+        self.debug('\n****************************')
+        self.debug(' Update values and best actions  ')
+        self.debug('****************************')
+
         for exp_idx, exp_node in enumerate(expanded_nodes):
             Z = self.build_ancestor_list(exp_node)
             # updates the best action at the node
             for node in Z:
-                print('\n  update values and best action: ' +
-                      str(node.state.state_print()))
-                print('current Q: ' + str(node.value))
+                self.debug('\n  update values and best action: ' +
+                           str(node.state.state_print()))
+                self.debug('current Q: ', node.value)
 
                 # all actions available at that node
                 all_action_operators = [
@@ -439,18 +459,18 @@ class RAOStar(object):
                     # of its children
                     exec_risk = risk + (1.0 - risk) * np.sum([p * child.exec_risk for (p, child)
                                                               in zip(prob_safe, children)])
-                    print('action: ' + act.name + ' children: ' + str(children[0].state.state_print()) +
-                          ' risk ' + str(exec_risk))
-                    print('act_op_value: ' + str(act.op_value) +
-                          ' child_value: ' + str(children[0].value))
-                    print('child Q: ' + str(Q))
+                    self.debug('action: ' + act.name + ' children: ' + str(children[0].state.state_print()) +
+                               ' risk ' + str(exec_risk))
+                    self.debug('act_op_value: ' + str(act.op_value) +
+                               ' child_value: ' + str(children[0].value))
+                    self.debug('child Q: ' + str(Q))
 
                     # if execution risk bound has been violated or if Q value for this action is worse
                     # than current best, we should definitely not select it.
                     if (exec_risk > er_bound) or self.is_worse(Q, best_Q):
                         select_action = False
                         if(exec_risk > er_bound):
-                            pritn(' Action pruned by risk bound')
+                            self.debug(' Action pruned by risk bound')
                     # if risk bound respected and Q value is equal or better
                     else:
                         select_action = True
@@ -460,8 +480,8 @@ class RAOStar(object):
                         # Updates the execution risk bounds for the children
                         child_er_bounds, cc_infeasible = self.compute_exec_risk_bounds(
                             er_bound, risk, children, prob_safe)
-                        print('node ' + str(node.state.state_print()) + ' child ' + child.state.state_print() + " depth: " + str(child.depth) +
-                              " risk bound: " + str(child.exec_risk_bound) + ' infeasible: ' + str(cc_infeasible))
+                        self.debug('node ' + str(node.state.state_print()) + ' child ' + child.state.state_print() + " depth: " + str(child.depth) +
+                                   " risk bound: " + str(child.exec_risk_bound) + ' infeasible: ' + str(cc_infeasible))
                         if not cc_infeasible:  # if chance constraint has not been violated
                             for idx, child in enumerate(children):
                                 child.exec_risk_bound = child_er_bounds[idx]
@@ -482,24 +502,27 @@ class RAOStar(object):
                     node.set_value(best_Q)
                     node.set_exec_risk(exec_risk_for_best)
                     node.set_best_action(all_action_operators[best_action_idx])
-                    print('best action for ' + str(node.state.state_print()) + ' set as ' +
-                          str(all_action_operators[best_action_idx].name))
+                    self.debug('best action for ' + str(node.state.state_print()) + ' set as ' +
+                               str(all_action_operators[best_action_idx].name))
                 else:  # no action was selected, so this node is terminal
-                    print(' no best action for ' +
-                          str(node.state.state_print()))
+                    self.debug('*\n*\n*\n*\n no best action for ',
+                               node.state.state_print(), '\n*\n*\n*\n')
                     if not node.terminal:
                         self.set_terminal_node(node)
 
     def compute_exec_risk_bounds(self, parent_bound, parent_risk, child_list, prob_safe_list, is_terminal_node=False):
         # computes the execution risk bounds for each sibling in a list of
         # children of a node
+        msg = 'compute_exec_risk_bounds: parent ' + str(parent_bound) + ' risk ' + str(parent_risk) + ' child_list ' + str(
+            child_list) + ' prob_safe_list ' + str(prob_safe_list) + ' terminal ' + str(is_terminal_node)
+        self.debug(msg)
         exec_risk_bounds = [0.0] * len(child_list)
         # If the parent bound is almost one, the risk of the children are
         # guaranteed to be feasible
         if np.isclose(parent_bound, 1.0):
             exec_risk_bounds = [1.0] * len(child_list)
             infeasible = False
-            print('parent bound close to 1!')
+            self.debug('parent bound close to 1!')
         else:
             # if parent bound isn't one, but risk is almost one, or if parent already violates the risk bound
             # don't try to propagate, since children guaranteed to violate
@@ -517,6 +540,10 @@ class RAOStar(object):
                     # Risk consumed by the siblings of the current node
                     sibling_term = np.sum(
                         [p * c.exec_risk for (p, c) in zip(prob_safe_list, child_list) if (c != child)])
+                    self.debug('sibling term:' + str(sibling_term))
+                    self.debug('first in min' + str((parent_term -
+                                                     sibling_term) / prob_safe_list[idx_child]))
+
                     # exec risk bound, which caps ar 1.0
                     exec_risk_bound = min(
                         [(parent_term - sibling_term) / prob_safe_list[idx_child], 1.0])
@@ -525,12 +552,16 @@ class RAOStar(object):
                     # of the execution risk for a child node violates its upper
                     # bound.
                     if exec_risk_bound >= 0.0:
+                        self.debug('child_exec_risk: ' + str(child.exec_risk) +
+                                   ' exec_risk_bound ' + str(exec_risk_bound))
                         if child.exec_risk <= exec_risk_bound or np.isclose(child.exec_risk, exec_risk_bound):
                             exec_risk_bounds[idx_child] = exec_risk_bound
                         else:
+                            self.debug('infeasible 1')
                             infeasible = True
                             break
                     else:
+                        self.debug('infeasible 2')
                         infeasible = True
                         break
         return exec_risk_bounds, infeasible
@@ -538,7 +569,7 @@ class RAOStar(object):
     def build_ancestor_list(self, expanded_node):
         # create set Z that contains the expanded node and all of its ancestors in the explicit graph
         # along marked action arcs (ancestors nodes from best policy)
-        # print('build ancestor of: ', expanded_node.name)
+        # self.debug('build ancestor of: ', expanded_node.name)
         Z = []
         queue = deque([expanded_node])
         while len(queue) > 0:
@@ -553,9 +584,9 @@ class RAOStar(object):
 
     def extract_policy(self):
         # extract policy mapping nodes to actions
-        # print("===========================")
-        # print("=== Extract Policy ========")
-        # print("===========================")
+        # self.debug("===========================")
+        # self.debug("=== Extract Policy ========")
+        # self.debug("===========================")
         queue = deque([self.graph.root])  # from root
         policy = {}
         for n in self.graph.nodes:
@@ -579,7 +610,8 @@ class RAOStar(object):
 
     def obtain_continuous_child_and_probs(self, belief, T, O, r, act):
         '''
-        predicted_beliefs, predicted_safe_beliefs = continuous_predict_belief(belief, T, act)
+        predicted_beliefs, predicted_safe_beliefs = continuous_predict_belief(
+            belief, T, act)
         '''
         pred_belief = {}
         # pred_belief_safe = {}
@@ -614,9 +646,9 @@ class RAOStar(object):
                 name=str(child_blf_state), value=None, state=child_blf_state)
             if self.graph.has_node(candidate_child_obj):  # if node already present
                 child_obj = self.graph.nodes[candidate_child_obj.name]
-                print(child_blf_state.state_print())
-                print(candidate_child_obj.name)
-                print(
+                self.debug(child_blf_state.state_print())
+                self.debug(candidate_child_obj.name)
+                self.debug(
                     '********************  search node already present  ***************')
             else:
                 # the node initiated
@@ -634,7 +666,7 @@ class RAOStar(object):
             #     prob_safe_list.append(0.0)
             count += 1
         # prob_safe_list = child
-        # print('child_obj_list', child_obj_list)
+        # self.debug('child_obj_list', child_obj_list)
         return child_obj_list, prob_list, prob_safe_list, new_child_idxs
 
     def obtain_child_objs_and_probs(self, belief, T, O, r, act):
@@ -647,9 +679,9 @@ class RAOStar(object):
         obs_distribution, obs_distribution_safe, state_to_obs = compute_observation_distribution(
             pred_belief, pred_belief_safe, O)
         # for each observation, computes corresponding updated belief
-        # print(obs_distribution)
-        # print(obs_distribution_safe)
-        # print(state_to_obs)
+        # self.debug(obs_distribution)
+        # self.debug(obs_distribution_safe)
+        # self.debug(state_to_obs)
         # raise ValueError()
         child_obj_list = []
         prob_list = []

@@ -43,12 +43,12 @@ K = np.matrix([[0, 0, 29.8815, 0],
 
 Ac = A + B * K
 K0 = np.diag([(1 - Ac[2, 2]) / B[2, 0], (1 - Ac[3, 3]) / B[3, 1]])
-print('k0', K0)
+# print('k0', K0)
 
 r = [[1], [1]]
 
-print('\nA:\n', A)
-print('\nB:\n', B)
+# print('\nA:\n', A)
+# print('\nB:\n', B)
 
 a1 = 2
 bb1 = -2
@@ -192,7 +192,7 @@ class BeliefState(object):
     def __init__(self, belief_dict, decimals=5):
         self.belief = belief_dict
 
-    def __repr__(self):
+    def state_print(self):
         return "BeliefState " + str(self.belief)
 
     @property
