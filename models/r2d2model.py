@@ -68,6 +68,9 @@ class R2D2Model(object):
             return []
         if self.in_a_fire(state):
             return []
+        if state[0] == 1 and state[1] == 1:
+            print('got to center cell')
+            return []
         return validActions
 
     def is_terminal(self, state):

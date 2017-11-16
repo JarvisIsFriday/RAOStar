@@ -5,7 +5,7 @@ from ashkan_icaps_model import *
 from iterative_raostar import *
 
 model = Ashkan_ICAPS_Model()
-algo = RAOStar(model, cc=0.99, debugging=True, ashkan_continuous=True)
+algo = RAOStar(model, cc=0.90, debugging=False, ashkan_continuous=True)
 
 b0 = ContinuousBeliefState(0, 0)
 P, G = algo.search(b0)

@@ -12,7 +12,7 @@ from iterative_raostar import *
 
 ice_blocks = [(1, 0), (1, 1)]
 model = R2D2Model(ice_blocks)
-algo = RAOStar(model, cc=0.08)
+algo = RAOStar(model, cc=0.08, debugging=True)
 
 b_init = {(1, 0, 0): 1.0}
 P, G = algo.search(b_init)

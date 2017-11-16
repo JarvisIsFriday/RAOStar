@@ -64,8 +64,7 @@ class Ashkan_ICAPS_Model(object):
 
     def state_risk(self, state):
         risk = static_obs_risk(state)
-        print('state_risk:' + str(state.state_print()) +
-              " {0:.2f}".format(risk))
+        # print('state_risk:' + str(state.state_print()) + " {0:.2f}".format(risk))
         return risk
 
     def costs(self, action):

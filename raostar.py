@@ -505,10 +505,25 @@ class RAOStar(object):
                     self.debug('best action for ' + str(node.state.state_print()) + ' set as ' +
                                str(all_action_operators[best_action_idx].name))
                 else:  # no action was selected, so this node is terminal
-                    self.debug('*\n*\n*\n*\n no best action for ',
-                               node.state.state_print(), '\n*\n*\n*\n')
+                    self.debug('*\n*\n*\n*\n no best action for ' +
+                               str(node.state.state_print()) + '\n*\n*\n*\n')
                     if not node.terminal:
                         self.set_terminal_node(node)
+
+                    # mdeyo: Finally got plans with deadends to work!
+                    # Deadends = state with no actions available, either
+                    # because it's an actual deadend or because all actons were
+                    # too risky.
+                    # If the deadend was on the optimal path, the planner would
+                    # just mark it terminal and planning would end before
+                    # the goal was achieved
+
+                    # mdeyo: Current fix is just to mark the deadend state as
+                    # having execution risk = 1.0 so that the planner will
+                    # remove the previous action from policy and properly pick
+                    # the next best action at the parent state
+                    node.risk = 1.0
+                    node.set_exec_risk(node.risk)
 
     def compute_exec_risk_bounds(self, parent_bound, parent_risk, child_list, prob_safe_list, is_terminal_node=False):
         # computes the execution risk bounds for each sibling in a list of
