@@ -67,7 +67,7 @@ class QuadModel(object):
 		guestDir = self.angle_mapping[guestState[2]]
 		# 50 % chance of moving forward 
 		guestState = (guestState[0], guestState[1], guestState[2], guestState[3]+1) # increase time step 
-		newguestState = (guestState[0] + guestDir[0], guestState[1] + guestDir[1], guestState[2], guestState[3]+1)
+		newguestState = (guestState[0] + guestDir[0], guestState[1] + guestDir[1], guestState[2], guestState[3])
 		return [((newquadState,guestState),0.5), ((newquadState,newguestState),0.5)]
 
 	def observations(self, state):

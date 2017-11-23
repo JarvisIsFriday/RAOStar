@@ -10,10 +10,16 @@ import_models()
 from quad_model import QuadModel
 from raostar import RAOStar
 
+# Simulation conditions 
+
+world_size = (7,7) # note the boundaries are walls 
+goal_state = (5,5)
+quad_init = (1,1,90) # (x,y,theta)
+guest_init = (3,1,90)
 
 # note the boundary of the world (ex anything with row column 0 and the upper bound)
 # is the wall
-model = QuadModel((7, 7), (5, 5))
+model = QuadModel(world_size, goal_state)
 algo = RAOStar(model, cc=0.1)
 
 b_init = {((1, 1, 90), (3, 1, 90)): 1.0}
