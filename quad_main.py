@@ -4,8 +4,6 @@
 # Yun Chang 2017 
 # yunchang@mit.edu
 
-# pygame implementation referenced from mdeyo dstar-lite 
-
 import quad_sim
 from utils import import_models
 import_models()

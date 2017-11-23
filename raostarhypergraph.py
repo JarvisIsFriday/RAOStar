@@ -183,9 +183,9 @@ class RAOStarHyperGraph(GraphElement):
 
     def __init__(self, name=None, properties={}):
         super(RAOStarHyperGraph, self).__init__(name, properties)
-        # Dictionary of nodes mapping their hash keys to themselves
+        # Dictionary of nodes mapping their string names to themselves
         self.nodes = {}
-        # Dictionary of operators mapping their hash keys to themselves
+        # Dictionary of operators mapping their string names to themselves
         self.operators = {}
         # Nested dictionary {parent_key: {operator_key: successors}}
         self.hyperedges = {}
