@@ -50,13 +50,14 @@ class R2D2Model(object):
             return False
 
     def in_a_fire(self, state):
+        # print(state)
         for fire in self.fires:
             if state[0] == fire[0] and state[1] == fire[1]:
                 return True
         return False
 
     def actions(self, state):
-        print('actions for: ' + str(state))
+        # print('actions for: ' + str.(state))
         validActions = []
         for act in self.action_list:
             newx = state[0] + act[0]
@@ -67,11 +68,15 @@ class R2D2Model(object):
             return []
         if self.in_a_fire(state):
             return []
+        # if state[0] == 1 and state[1] == 1:
+        #     print('got to center cell')
+        #     return []
         return validActions
 
     def is_terminal(self, state):
         # if state[1] == self.goal[1]:
             # raise ValueError()
+        # print(state.keys[0])
         return state[0] == self.goal[0] and state[1] == self.goal[1]
 
     def state_transitions(self, state, action):
@@ -84,7 +89,7 @@ class R2D2Model(object):
         if not self.state_valid(intended_new_state):
             return newstates
         if (state[0], state[1]) in self.icy_blocks and "right" in action:
-            print('got right action!')
+            # print('got right action!')
             newstates.append([intended_new_state, self.icy_move_forward_prob])
             for slip in [-1, 1]:
                 slipped = [(action[i] + slip) % 2 * slip for i in range(2)]
@@ -183,8 +188,7 @@ class R2D2Model(object):
             row = int(coords.split(",")[1])
             depth = int(coords.split(",")[2])
             col_row_str = str(col) + ',' + str(row)
-
-            action_string = policy[key]
+            action_string = policy[key]['action']
             for action_name in self.action_map:
                 if action_name in action_string:
                     if col_row_str not in depth_found:  # first depth found
