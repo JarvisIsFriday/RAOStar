@@ -434,8 +434,6 @@ class RAOStar(object):
                 else:  # no action was selected, so this node is terminal
                     self.debug('*\n*\n*\n*\n no best action for ' +
                                str(node.state.state_print()) + '\n*\n*\n*\n')
-                    if not node.terminal:
-                        self.set_terminal_node(node)
 
                     # mdeyo: Finally got plans with deadends to work!
                     # Deadends = state with no actions available, either
@@ -449,13 +447,15 @@ class RAOStar(object):
                     # having execution risk = 1.0 so that the planner will
                     # remove the previous action from policy and properly pick
                     # the next best action at the parent state
-                    node.risk = 1.0
-                    node.set_exec_risk(node.risk)
+                    # node.risk = 1.0
+                    # node.set_exec_risk(node.risk)
 
                     # mdeyo: alternative, possibly better fix is to update the
                     # value instead of the risk, setting the value to +inf when
                     # minimizing
-                    self.mark_deadend(node)
+                    if not node.terminal:
+                        self.mark_deadend(node)
+                        self.set_terminal_node(node)
 
                     # mdeyo: some further testing shows that both these
                     # solutions to deadends seem to have the same resulting

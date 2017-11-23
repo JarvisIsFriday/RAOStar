@@ -11,11 +11,11 @@ from raostar import RAOStar
 import graph_to_json
 from iterative_raostar import *
 
-chance_constraint = 0.08 
+chance_constraint = 0.08
 
 ice_blocks = [(1, 0), (1, 1)]
 model = R2D2Model(ice_blocks)
-algo = RAOStar(model, cc=chance_constraint)
+algo = RAOStar(model, cc=chance_constraint, debugging=False)
 
 b_init = {(1, 0, 0): 1.0}
 P, G = algo.search(b_init)
