@@ -48,9 +48,8 @@ class Ashkan_ICAPS_Model(object):
     def is_terminal(self, state):
         # print('is_terminal', state.state_print())
         x, y = state.mean_b[0], state.mean_b[1]
-        # return(x > self.goal_area[0] and x < self.max_coords[0] and y >
-        # self.goal_area[1] and y < self.max_coords[1])
-        return(x > self.goal_area[0] and y > self.goal_area[1])
+        return(x > self.goal_area[0] and x < self.max_coords[0] and y > self.goal_area[1] and y < self.max_coords[1])
+        # return(x > self.goal_area[0] and y > self.goal_area[1])
         # return(state.mean_b[0] > self.goal_x)
 
     def state_transitions(self, state, action):
@@ -107,7 +106,7 @@ a2 = 1
 bb2 = 2
 a3 = -4
 bb3 = 27
-a4 = -1 / 3
+a4 = float(-1 / 3.0)
 bb4 = 5
 
 

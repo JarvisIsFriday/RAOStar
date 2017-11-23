@@ -453,6 +453,8 @@ class RAOStar(object):
                     # mdeyo: alternative, possibly better fix is to update the
                     # value instead of the risk, setting the value to +inf when
                     # minimizing
+
+                    # only mark inf value deadend if not actually the goal
                     if not node.terminal:
                         self.mark_deadend(node)
                         self.set_terminal_node(node)

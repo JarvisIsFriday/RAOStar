@@ -71,7 +71,7 @@ class Simulator(object):
 
         x = center_x - width_x
         y = center_y - width_y
-        # print(center_x, center_y, width_x, width_y, x, y)
+        print(center_x, center_y, width_x, width_y, x, y)
 
         self.ego_poly_stddev = self.C.create_oval(x, y, x + width_x * 2, y + width_y * 2, outline="gray",
                                                   fill="", width=2)

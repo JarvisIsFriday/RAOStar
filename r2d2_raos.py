@@ -11,7 +11,7 @@ from raostar import RAOStar
 import graph_to_json
 from iterative_raostar import *
 
-chance_constraint = 0.08
+chance_constraint = 0.09
 
 ice_blocks = [(1, 0), (1, 1)]
 model = R2D2Model(ice_blocks)
