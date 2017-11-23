@@ -21,13 +21,15 @@ from belief import *
 
 
 class Ashkan_ICAPS_Model(object):
-    def __init__(self):
+    def __init__(self, name="unnamed model"):
         self.vel = 2
+        self.name = name
 
         # environment size (x,y)
         # model walls as risks
         # goal specify direction as well as coordinate (x,y,thet)
         self.goal_area = [8, 8]
+        self.max_coords = [10, 10]
         # self.goal_area = [5, 5]
 
         # now trying goal is just hitting x coord
@@ -41,11 +43,14 @@ class Ashkan_ICAPS_Model(object):
         Not limiting the ego to stay without bounds.
         '''
         diag_factor = 1 / np.sqrt(2)
-        return [['RIGHT', self.vel, 0], ['UP-RIGHT', self.vel * diag_factor, self.vel * diag_factor], ['UP', 0, self.vel], ['UP-LEFT', -self.vel * diag_factor, self.vel * diag_factor], ['LEFT', -self.vel, 0]]
+        return [['DOWN', 0, -self.vel], ['DOWN-RIGHT', self.vel * diag_factor, -self.vel * diag_factor], ['RIGHT', self.vel, 0], ['UP-RIGHT', self.vel * diag_factor, self.vel * diag_factor], ['UP', 0, self.vel], ['UP-LEFT', -self.vel * diag_factor, self.vel * diag_factor], ['LEFT', -self.vel, 0], ['DOWN-LEFT', -self.vel * diag_factor, -self.vel * diag_factor]]
 
     def is_terminal(self, state):
         # print('is_terminal', state.state_print())
-        return(state.mean_b[0] > self.goal_area[0] and state.mean_b[1] > self.goal_area[1])
+        x, y = state.mean_b[0], state.mean_b[1]
+        # return(x > self.goal_area[0] and x < self.max_coords[0] and y >
+        # self.goal_area[1] and y < self.max_coords[1])
+        return(x > self.goal_area[0] and y > self.goal_area[1])
         # return(state.mean_b[0] > self.goal_x)
 
     def state_transitions(self, state, action):
@@ -87,7 +92,7 @@ class Ashkan_ICAPS_Model(object):
         # print('h state', state)
         # distance_to_goal_corner = np.sqrt((state.mean_b[0] - self.goal_x)**2)
         distance_to_goal_corner = np.sqrt(
-            (state.mean_b[0] - self.goal_area[0] - 2)**2 + (state.mean_b[1] - self.goal_area[1] - 2)**2)
+            (state.mean_b[0] - (self.goal_area[0] + 1))**2 + (state.mean_b[1] - (self.goal_area[1] + 1))**2)
         return distance_to_goal_corner
         # return np.sqrt(sum([(self.goal[i] - state[0][i])**2 for i in
         # range(2)]))
@@ -117,6 +122,14 @@ def one_line_risk(a1, b1, m1, std1):
     # print('mo2', mo2)
     # print('po2', po2)
     return 1 - norm.cdf(0, mo2, po2)
+
+
+def static_obs_risk_coords(xy, std):
+    risks = [1 - one_line_risk(a1, bb1, xy, std),
+             1 - one_line_risk(a2, bb2, xy, std),
+             1 - one_line_risk(a3, bb3, xy, std),
+             one_line_risk(a4, bb4, xy, std)]
+    return min(risks)
 
 
 def static_obs_risk(belief_state):

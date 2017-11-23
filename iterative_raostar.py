@@ -54,6 +54,13 @@ def next_child(G, state):
 import copy
 
 
+def most_likely_next_state(G, model, node):
+    # print('current node:', node.state.state_print())
+    next_state = next_child(G, node)
+    # print('next node:', node)
+    return next_state
+
+
 def most_likely_policy(G, model):
     print('\n## Policy start ##')
     s = G.root
