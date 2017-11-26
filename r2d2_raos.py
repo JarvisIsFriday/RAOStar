@@ -27,4 +27,5 @@ model.print_policy(P)
 # for n in G.nodes.values():
 # 	n.print_node()
 
-graph_to_json.graph_to_json(G, chance_constraint, "r2d2_raos.json")
+g = graph_to_json.graph_to_json(G, chance_constraint, "r2d2_raos.json")
+print(g)

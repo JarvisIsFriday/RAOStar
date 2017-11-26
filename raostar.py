@@ -109,7 +109,7 @@ class RAOStar(object):
         self.graph = RAOStarHyperGraph(name='G')
         start_node = RAOStarGraphNode(
             name=str(b0), value=None, state=BeliefState(b0))
-        self.set_new_node(start_node, 0, self.cc)
+        self.set_new_node(start_node, 0, self.cc, 1.0)
         print('root node:')
         print(start_node.name + " risk bound: " +
               str(start_node.exec_risk_bound))
@@ -117,14 +117,15 @@ class RAOStar(object):
         self.graph.set_root(start_node)
         self.update_policy_open_nodes()
 
-    def set_new_node(self, node, depth, er_bound):
-        # sets the fields of a terminal node
+    def set_new_node(self, node, depth, er_bound, prob):
+        # sets the fields of a new node
         b = node.state.belief
         # Depth of a node is its dist to the root
         node.depth = depth
         # Probability of violating constraints in a belief state. (never
         # change)
         node.risk = bound_prob(avg_func(b, self.r))
+        node.set_prob(prob) 
         if is_terminal_belief(b, self.term, self.terminal_prob):
             self.set_terminal_node(node)
         else:
@@ -224,7 +225,7 @@ class RAOStar(object):
                     # initializes the new child nodes
                     for c_idx in new_child_idxs:
                         self.set_new_node(
-                            child_obj_list[c_idx], parent_depth + 1, 0.0)
+                            child_obj_list[c_idx], parent_depth + 1, 0.0, prob_list[c_idx])
                     # if parent bound Delta is ~ 1.0, the child nodes are guaranteed to have
                     # their risk bound equal to 1
                     if (not np.isclose(parent_bound, 1.0)):

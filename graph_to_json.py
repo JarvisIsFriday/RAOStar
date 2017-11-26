@@ -41,12 +41,15 @@ def graph_to_json(G, cc, filename, settings=default_settings):
 	node_strings = nodes.keys()
 	edges = G.hyperedges
 	parents = G.hyperedges.keys()
+	# print([(p.name, len(edges[p])) for p in parents])
+	# print([c])
 	n_ind = 0 # nodes str index 
+	e_ind = 0 # edges str index 
 	# add edges and nodes 
 	added_nodes = {} # given node_name: node-i
 	for i in range(len(parents)):
 		for op in edges[parents[i]]:
-			edge_str = "edge-%d"%(i)
+			edge_str = "edge-%d"%(e_ind)
 			# add parents to node list
 			if parents[i].name not in added_nodes: # add node 
 				nodestr = "node-%d"%(n_ind)
@@ -64,11 +67,12 @@ def graph_to_json(G, cc, filename, settings=default_settings):
 					added_nodes[c.name] = nodestr
 					graph_info["nodes"][nodestr] = node_info(c,cc)
 					n_ind += 1
-				e_info["successors"][added_nodes[c.name]] = {"probability":0.1}
+				e_info["successors"][added_nodes[c.name]] = {"probability":c.probability}
 			graph_info["edges"][edge_str] = e_info
+			e_ind += 1
 
 	with open(filename, 'w') as fjson:
 			json.dump(graph_info, fjson)
-	print(added_nodes)
+	# print(added_nodes)
 	return graph_info
 

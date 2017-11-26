@@ -38,3 +38,4 @@ P, G = algo.search(b_init)
 
 # # print out the policy for each state of guest 
 gshow = graph_to_json.graph_to_json(G, 0.1, 'quadraos.json')
+
