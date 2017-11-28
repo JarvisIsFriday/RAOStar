@@ -56,8 +56,11 @@ def policy_to_json(G, cc, filename, settings=default_settings):
 				"successors": {}}
 			for c in children:
 				queue.append(c)
-				nodestr = "node-%d"%(n_ind)
-				added_nodes[c.name] = nodestr
+				if c.name not in added_nodes:
+					nodestr = "node-%d"%(n_ind)
+					added_nodes[c.name] = nodestr
+				else: 
+					nodestr = added_nodes[c.name]
 				graph_info["nodes"][nodestr] = node_info(c,cc)
 				n_ind += 1
 				print(c.name, c.probability)
