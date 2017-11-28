@@ -163,6 +163,7 @@ class RAOStar(object):
             node.risk = bound_prob(avg_func(b, self.r))
             # Depth of a node is its dist to the root
             node.depth = depth
+            node.set_prob(prob)
             # Probability of violating constraints in a belief state. (never
             # change)
             if is_terminal_belief(b, self.term, self.terminal_prob):

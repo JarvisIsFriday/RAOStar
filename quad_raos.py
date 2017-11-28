@@ -17,7 +17,7 @@ import graph_to_json
 world_size = (7,7) # note the boundaries are walls 
 goal_state = (5,5,90)
 quad_init = (1,1,90,0) # (x,y,theta,t)
-guest_init = (3,3,90,0)
+guest_init = (3,1,90,0)
 
 # note the boundary of the world (ex anything with row column 0 and the upper bound)
 # is the wall
@@ -37,5 +37,5 @@ P, G = algo.search(b_init)
 # print(P_notNone)
 
 # # print out the policy for each state of guest 
-gshow = graph_to_json.graph_to_json(G, 0.1, 'quadraos.json')
+gshow = graph_to_json.policy_to_json(G, 0.1, 'quadraos.json')
 
