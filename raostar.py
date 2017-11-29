@@ -455,8 +455,10 @@ class RAOStar(object):
                     # minimizing
 
                     # only mark inf value deadend if not actually the goal
-                    if not node.terminal:
+                    if not self.term(node.state):
                         self.mark_deadend(node)
+
+                    if not node.terminal:
                         self.set_terminal_node(node)
 
                     # mdeyo: some further testing shows that both these

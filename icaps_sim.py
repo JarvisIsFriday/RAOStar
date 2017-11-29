@@ -39,8 +39,8 @@ class Simulator(object):
         self.model = model
         self.current_state = graph.root
         two_sqrt_two = 1 / np.sqrt(2)
-        self.model_actions = {"UP-LEFT": [-two_sqrt_two, -two_sqrt_two],
-                              "UP": [0, -1], "UP-RIGHT": [two_sqrt_two, -two_sqrt_two], "RIGHT": [1, 0]}
+        self.model_actions = {"LEFT": [-1, 0], "UP-LEFT": [-two_sqrt_two, -two_sqrt_two],
+                              "UP": [0, -1], "UP-RIGHT": [two_sqrt_two, -two_sqrt_two], "RIGHT": [1, 0], "DOWN-RIGHT": [two_sqrt_two, two_sqrt_two], "DOWN": [0, 1], "DOWN-LEFT": [-two_sqrt_two, two_sqrt_two]}
         self.done_policy = False
         self.draw_grid()
 

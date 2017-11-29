@@ -17,7 +17,7 @@ if __name__ == '__main__':
     model = Ashkan_ICAPS_Model(str(cc * 100) + "% risk")
     algo = RAOStar(model, cc=cc, debugging=False, ashkan_continuous=True)
 
-    b0 = ContinuousBeliefState(1, 1)
+    b0 = ContinuousBeliefState(2, 1)
     P, G = algo.search(b0)
 
     most_likely_policy(G, model)

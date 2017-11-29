@@ -17,7 +17,7 @@ _____________
 
 import numpy as np
 from scipy.stats import norm
-from belief import *
+from continuous_belief import *
 
 
 class Ashkan_ICAPS_Model(object):
@@ -48,8 +48,12 @@ class Ashkan_ICAPS_Model(object):
     def is_terminal(self, state):
         # print('is_terminal', state.state_print())
         x, y = state.mean_b[0], state.mean_b[1]
-        return(x > self.goal_area[0] and x < self.max_coords[0] and y > self.goal_area[1] and y < self.max_coords[1])
-        # return(x > self.goal_area[0] and y > self.goal_area[1])
+        # return(x > self.goal_area[0] and x < self.max_coords[0] and y >
+        # self.goal_area[1] and y < self.max_coords[1])
+        result = (x > self.goal_area[0] and y > self.goal_area[1])
+        # if result:
+        # print('found goal!')
+        return result
         # return(state.mean_b[0] > self.goal_x)
 
     def state_transitions(self, state, action):
@@ -79,6 +83,9 @@ class Ashkan_ICAPS_Model(object):
 
     def values(self, state, action):
         # return value (heuristic + cost)
+        if self.is_terminal(state):
+            return 0
+
         return self.costs(action)
         # return self.costs(action) + self.heuristic(state)
 
@@ -88,6 +95,8 @@ class Ashkan_ICAPS_Model(object):
             state = state
         else:
             state = state.state
+        if self.is_terminal(state):
+            return 0
         # print('h state', state)
         # distance_to_goal_corner = np.sqrt((state.mean_b[0] - self.goal_x)**2)
         distance_to_goal_corner = np.sqrt(
