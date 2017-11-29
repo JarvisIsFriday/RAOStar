@@ -25,7 +25,7 @@ P = clean_policy(P)
 model.print_model()
 model.print_policy(P)
 
-
 most_likely_policy(G, model)
 
-graph_to_json.graph_to_json(G, chance_constraint, "r2d2_raos.json")
+g = graph_to_json.policy_to_json(G, chance_constraint, "r2d2_raos.json")
+# print(g)

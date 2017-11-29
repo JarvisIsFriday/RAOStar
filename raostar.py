@@ -130,7 +130,7 @@ class RAOStar(object):
         else:
             start_node = RAOStarGraphNode(
                 name=str(b0), value=None, state=BeliefState(b0))
-        self.set_new_node(start_node, 0, self.cc)
+        self.set_new_node(start_node, 0, self.cc, 1.0)
         self.debug('root node:')
         self.debug(start_node.state.state_print() + " risk bound: " +
                    str(start_node.exec_risk_bound))
@@ -138,12 +138,13 @@ class RAOStar(object):
         self.graph.set_root(start_node)
         self.update_policy_open_nodes()
 
-    def set_new_node(self, node, depth, er_bound):
+    def set_new_node(self, node, depth, er_bound, prob):
         # sets the fields of a terminal node
         if self.continuous_belief:
             b = node.state
             node.risk = bound_prob(self.r(b))
             node.depth = depth
+            node.set_prob(prob)
             if self.term(node.state):
                 self.set_terminal_node(node)
             else:
@@ -162,6 +163,7 @@ class RAOStar(object):
             node.risk = bound_prob(avg_func(b, self.r))
             # Depth of a node is its dist to the root
             node.depth = depth
+            node.set_prob(prob)
             # Probability of violating constraints in a belief state. (never
             # change)
             if is_terminal_belief(b, self.term, self.terminal_prob):
@@ -290,7 +292,7 @@ class RAOStar(object):
                     # initializes the new child nodes
                     for c_idx in new_child_idxs:
                         self.set_new_node(
-                            child_obj_list[c_idx], parent_depth + 1, 0.0)
+                            child_obj_list[c_idx], parent_depth + 1, 0.0, prob_list[c_idx])
                     # if parent bound Delta is ~ 1.0, the child nodes are guaranteed to have
                     # their risk bound equal to 1
                     if (not np.isclose(parent_bound, 1.0)):

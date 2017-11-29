@@ -86,6 +86,10 @@ class RAOStarGraphNode(GraphElement):
         self.exec_risk = 0.0  # Execution risk
         self.exec_risk_bound = 1.0  # Bound on execution risk
         self.depth = 0  # Initial depth
+        self.probability = 0.0
+
+    def set_prob(self, prob):
+        self.probability = prob 
 
     def set_depth(self, new_depth):
         """Sets new non-negative depth"""
