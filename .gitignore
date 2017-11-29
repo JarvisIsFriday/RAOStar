@@ -1,2 +1,4 @@
 # ignore compiled python
 *.pyc
+# ignore json results
+*.json

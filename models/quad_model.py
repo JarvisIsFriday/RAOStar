@@ -26,13 +26,14 @@ class QuadModel(object):
 		self.envSize = world_size
 		# environment size (x,y)
 		# model walls as risks 
-		self.goal = goalCoord
+		self.goal = goalCoord # goal specify direction as well as coordinate (x,y,thet)
 		self.optimization = "minimize"
 		self.angle_mapping = {0:[1,0],45:[1,1],90:[0,1],135:[-1,1],180:[-1,0], \
 								225:[-1,-1],270:[0,-1],315:[1,-1]}
+		# note state include time (depth) 
 		
 	def actions(self, state):
-		if state[0] == self.goal: 
+		if state[0][0] == self.goal[0] and state[0][1] == self.goal[1]: 
 			return [] # at goal no more actions required 
 		elif state[0][0] == 0 or state[0][1] == 0 \
 					or state[0][0] == self.envSize[0]-1 or state[0][1] == self.envSize[1]-1:
@@ -41,7 +42,7 @@ class QuadModel(object):
 			return ["forward", "turn-right-45", "turn-left-45"] # was originally going to have turn right and left 90 can easily add it in 
 
 	def is_terminal(self, state):
-		return state == self.goal 
+		return (state[0][0] == self.goal[0] and state[0][1] == self.goal[1])
 
 	def state_transitions(self, state, action):
 		# note the state is both where the controlled quad is in the env and where the other quad is in the env
@@ -52,27 +53,28 @@ class QuadModel(object):
 		guestState = state[1] # uncontrolled robot 
 		if action == "forward":
 			direction = self.angle_mapping[quadState[2]]
-			newquadState = (quadState[0] + direction[0], quadState[1] + direction[1], quadState[2])
-		elif action[:10] == "turn-right":
-			angle = int(action[11:])
+			newquadState = (quadState[0] + direction[0], quadState[1] + direction[1], quadState[2], quadState[3]+1)
+		elif action == "turn-right-45":
+			angle = 45 # int(action[11:])
 			newAng = (quadState[2] - angle) % 360 
-			newquadState = (quadState[0], quadState[1], newAng)
-		elif action[:9] == "turn-left":
-			angle = int(action[10:])
-			newAng = int(quadState[2] + angle) % 360 
-			newquadState = (quadState[0], quadState[1], newAng)
+			newquadState = (quadState[0], quadState[1], newAng, quadState[3]+1)
+		elif action == "turn-left-45":
+			angle = 45 # int(action[10:])
+			newAng = (quadState[2] + angle) % 360 
+			newquadState = (quadState[0], quadState[1], newAng, quadState[3]+1)
 		else: 
 			newquadState = quadState
 		guestDir = self.angle_mapping[guestState[2]]
 		# 50 % chance of moving forward 
-		newguestState = (guestState[0] + guestDir[0], guestState[1] + guestDir[1], guestState[2])
+		guestState = (guestState[0], guestState[1], guestState[2], guestState[3]+1) # increase time step 
+		newguestState = (guestState[0] + guestDir[0], guestState[1] + guestDir[1], guestState[2], guestState[3])
 		return [((newquadState,guestState),0.5), ((newquadState,newguestState),0.5)]
 
 	def observations(self, state):
 		return [(state, 1.0)] # assume observations is deterministic 
 
 	def state_risk(self, state):
-		if (state[0][0], state[0][1]) == (state[1][0], state[1][1]):
+		if (state[0][0], state[0][1], state[0][3]) == (state[1][0], state[1][1], state[1][3]):
 			return 1.0
 		elif state[0][0] == 0 or state[0][1] == 0 \
 					or state[0][0] == self.envSize[0]-1 or state[0][1] == self.envSize[1]-1:
@@ -83,7 +85,7 @@ class QuadModel(object):
 		if action == "turn-right-45" or action == "turn-left-45":
 			return 2 # bias in going forward 
 		else:
-			return 1
+			return 1.5
 
 	def values(self, state, action):
 		# return value (heuristic + cost)
@@ -91,7 +93,7 @@ class QuadModel(object):
 
 	def heuristic(self, state):
 		# square of euclidean distance as heuristic
-		return sum([(self.goal[i] - state[0][i])**2 for i in range(2)])
+		return np.sqrt(sum([(self.goal[i] - state[0][i])**2 for i in range(2)]))
 
 	def execution_risk_heuristic(self, state):
 		return 0 # don't have a good heuristic for this yet 

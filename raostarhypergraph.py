@@ -86,6 +86,10 @@ class RAOStarGraphNode(GraphElement):
         self.exec_risk = 0.0  # Execution risk
         self.exec_risk_bound = 1.0  # Bound on execution risk
         self.depth = 0  # Initial depth
+        self.probability = 0.0
+
+    def set_prob(self, prob):
+        self.probability = prob 
 
     def set_depth(self, new_depth):
         """Sets new non-negative depth"""
@@ -183,9 +187,9 @@ class RAOStarHyperGraph(GraphElement):
 
     def __init__(self, name=None, properties={}):
         super(RAOStarHyperGraph, self).__init__(name, properties)
-        # Dictionary of nodes mapping their hash keys to themselves
+        # Dictionary of nodes mapping their string names to themselves
         self.nodes = {}
-        # Dictionary of operators mapping their hash keys to themselves
+        # Dictionary of operators mapping their string names to themselves
         self.operators = {}
         # Nested dictionary {parent_key: {operator_key: successors}}
         self.hyperedges = {}
