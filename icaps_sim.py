@@ -78,6 +78,23 @@ class Simulator(object):
         self.ego_poly = self.C.create_oval(center_x - min_size, center_y - min_size, center_x + min_size, center_y + min_size, outline="red",
                                            fill="red", width=2)
 
+    def draw_agent(self, node):
+        print('risk', self.model.state_risk(node.state))
+        min_size = 5
+        center_x, center_y = self.convert_coords(
+            float(node.state.agent_mean_b[0]), float(node.state.agent_mean_b[1]))
+        width_x = max(min_size, float(
+            node.state.agent_sigma_b[0, 0]) * self.gs)
+        width_y = max(min_size, float(
+            node.state.agent_sigma_b[1, 1]) * self.gs)
+        x = center_x - width_x
+        y = center_y - width_y
+
+        self.agent_poly_stddev = self.C.create_oval(x, y, x + width_x * 2, y + width_y * 2, outline="gray",
+                                                    fill="", width=2)
+        self.agent_poly = self.C.create_oval(center_x - min_size, center_y - min_size, center_x + min_size, center_y + min_size, outline="red",
+                                             fill="red", width=2)
+
     def draw_next_action(self, node):
         center_x, center_y = self.convert_coords(
             float(node.state.mean_b[0]), float(node.state.mean_b[1]))
@@ -147,26 +164,10 @@ class Simulator(object):
         self.draw_static_obstacle()
 
         self.draw_ego(self.graph.root)
+        self.draw_agent(self.graph.root)
+
         self.draw_next_action(self.graph.root)
 
-        self.master.update()
-        return True
-
-    def draw_quad(self, pose):  # represent quad as triangle
-        (posx, posy, postheta, t) = pose
-        # find corresponding pixel value
-        x = posx * self.gs + posx + int(self.gs / 2)
-        y = self.h - (posy * self.gs + posy + int(self.gs / 2))  # fo
-        thet = postheta / 360. * 2 * np.pi
-        l = self.gs * 1 / 3.
-        a = np.pi * 2 / 3.
-        [x1, y1] = [int(x + l * np.cos(thet)), int(y - l * np.sin(thet))]
-        [x2, y2] = [int(x + l * np.cos(thet - a)),
-                    int(y - l * np.sin(thet - a))]
-        [x3, y3] = [int(x + l * np.cos(thet + a)),
-                    int(y - l * np.sin(thet + a))]
-        self.quad_poly = self.C.create_polygon(
-            x1, y1, x2, y2, x3, y3, fill='red')
         self.master.update()
         return True
 
@@ -184,23 +185,6 @@ class Simulator(object):
         [x3, y3] = [int(x + l * np.cos(thet + a)),
                     int(y - l * np.sin(thet + a))]
         self.C.coords(self.quad_poly, (x1, y1, x2, y2, x3, y3))
-
-    def draw_guest(self, pose):  # ind corresponding pixel value
-        (posx, posy, postheta, t) = pose  # draw the guest
-        x = posx * self.gs + posx + int(self.gs / 2)  # f
-        y = self.h - (posy * self.gs + posy + int(self.gs / 2))  # fo
-        thet = postheta / 360. * 2 * np.pi
-        l = self.gs * 1 / 3.
-        a = np.pi * 2 / 3.
-        [x1, y1] = [int(x + l * np.cos(thet)), int(y - l * np.sin(thet))]
-        [x2, y2] = [int(x + l * np.cos(thet - a)),
-                    int(y - l * np.sin(thet - a))]
-        [x3, y3] = [int(x + l * np.cos(thet + a)),
-                    int(y - l * np.sin(thet + a))]
-        self.guest_poly = self.C.create_polygon(
-            x1, y1, x2, y2, x3, y3, fill='green')
-        self.master.update()
-        return True
 
     def move_guest(self, pose):
         (posx, posy, postheta, t) = pose
@@ -235,6 +219,7 @@ class Simulator(object):
                 self.current_state = most_likely_next_state(
                     self.graph, self.model, self.current_state)
                 self.draw_ego(self.current_state)
+                self.draw_agent(self.current_state)
                 self.draw_next_action(self.current_state)
                 self.master.update()
 
