@@ -5,6 +5,8 @@
 # author: Yun Chang
 # yunchang@mit.edu
 
+import numpy as np
+
 
 class BeliefState(object):
     """

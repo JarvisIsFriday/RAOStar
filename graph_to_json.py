@@ -63,11 +63,9 @@ def policy_to_json(G, cc, filename, settings=default_settings):
 					nodestr = added_nodes[c.name]
 				graph_info["nodes"][nodestr] = node_info(c,cc)
 				n_ind += 1
-				print(c.name, c.probability)
 				e_info["successors"][nodestr] = {"probability":c.probability}
 			graph_info["edges"][edge_str] = e_info
 			e_ind += 1
-	print(added_nodes)
 	with open(filename, 'w') as fjson:
 		json.dump(graph_info, fjson)
 	return graph_info

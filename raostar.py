@@ -457,8 +457,12 @@ class RAOStar(object):
                     # minimizing
 
                     # only mark inf value deadend if not actually the goal
-                    if not self.term(node.state):
-                        self.mark_deadend(node)
+                    if self.continuous_belief:
+                        if not self.term(node.state):
+                            self.mark_deadend(node)
+                    else:
+                        if not is_terminal_belief(node.state.belief, self.term, self.terminal_prob):
+                            self.mark_deadend(node)
 
                     if not node.terminal:
                         self.set_terminal_node(node)
