@@ -16,8 +16,8 @@ import numpy as np
 # Simulation conditions 
 world_size = (7,7) # note the boundaries are walls 
 goal_state = (5,5,90)
-quad_init = (1,1,90,0) # (x,y,theta,t)
-guest_init = (3,3,90,0)
+quad_init = (3,1,90,0) # (x,y,theta,t)
+guest_init = (1,3,90,0)
 
 ### Plce state string in nicer format
 def get_state_from_string(state_string):
@@ -50,11 +50,12 @@ def get_state_from_string(state_string):
 # note the boundary of the world (ex anything with row column 0 and the upper bound)
 # is the wall
 model = QuadModel(world_size, goal_state)
-algo = RAOStar(model, cc=0.00001)
+algo = RAOStar(model, cc=0.5)
 
 b_init = {(quad_init, guest_init): 1.0} # initialize belief state 
 
 P, G = algo.search(b_init)
+# print(P)
 sorted_policy = {} # sort policy by quad state 
 for statestring in P.keys():
 	state = get_state_from_string(statestring)
@@ -63,7 +64,7 @@ for statestring in P.keys():
 	else: 
 		sorted_policy[state[0]][state[1]] = P[statestring]
 
-# print(sorted_policy)
+print(sorted_policy)
 S = quad_sim.Simulator(world_size[0], world_size[1], sorted_policy, model, (quad_init, guest_init))
 S.draw_grid()
 S.draw_quad(quad_init)

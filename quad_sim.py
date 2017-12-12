@@ -112,6 +112,7 @@ class Simulator(object):
 
     def update_new_state(self):
         act = self.policy[self.current_state[0]][self.current_state[1]]
+        print(act)
         newstate = self.model.state_transitions(
             self.current_state, act)[self.event]
         self.current_state = newstate[0]

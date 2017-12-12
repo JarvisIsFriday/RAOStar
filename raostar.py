@@ -560,13 +560,13 @@ class RAOStar(object):
         # self.debug("===========================")
         queue = deque([self.graph.root])  # from root
         policy = {}
-        for n in self.graph.nodes:
-            node = self.graph.nodes[n]
+        while len(queue) > 0:
+            node = queue.popleft()
             if node.best_action != None:
-                policy[n] = {"state": node.state,
-                             "action": node.best_action.name}
-            else:
-                policy[n] = 'None'
+                policy[node.name] = node.best_action.name
+                children = self.graph.hyperedges[node][node.best_action]
+                for c in children:
+                    queue.append(c)
         return policy
 
     def choose_node(self):
