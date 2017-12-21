@@ -83,7 +83,7 @@ class QuadModel(object):
 
 	def costs(self, action):
 		if action == "turn-right-45" or action == "turn-left-45":
-			return 0 # bias in going forward 
+			return 1. # bias in going forward 
 		else:
 			return 1.5
 
@@ -92,8 +92,15 @@ class QuadModel(object):
 		return self.costs(action) + self.heuristic(state)
 
 	def heuristic(self, state):
-		# square of euclidean distance as heuristic
-		return np.sqrt(sum([(self.goal[i] - state[0][i])**2 for i in range(2)]))
+		# square of euclidean distance + angle heuristic 
+		disp = [(self.goal[i] - state[0][i]) for i in range(2)]
+		dist = np.sqrt(sum([(self.goal[i] - state[0][i])**2 for i in range(2)]))
+		# see which direction the goal is at 
+		# a = state[0][2]/360*2*np.pi
+		# curr_dir = [np.cos(a), np.sin(a)]
+		# ang_diff = np.arccos((disp[0]*curr_dir[0] + disp[1]*curr_dir[1])/dist)
+		# ang_h = ang_diff/(np.pi/4.)
+		return dist #+ ang_h
 
 	def execution_risk_heuristic(self, state):
 		return 0 # don't have a good heuristic for this yet 

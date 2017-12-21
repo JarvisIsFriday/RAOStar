@@ -16,8 +16,8 @@ import numpy as np
 # Simulation conditions 
 world_size = (7,7) # note the boundaries are walls 
 goal_state = (5,5,90)
-quad_init = (3,1,90,0) # (x,y,theta,t)
-guest_init = (1,3,90,0)
+quad_init = (1,1,90,0) # (x,y,theta,t)
+guest_init = (3,1,90,0)
 
 ### Plce state string in nicer format
 def get_state_from_string(state_string):
@@ -50,7 +50,7 @@ def get_state_from_string(state_string):
 # note the boundary of the world (ex anything with row column 0 and the upper bound)
 # is the wall
 model = QuadModel(world_size, goal_state)
-algo = RAOStar(model, cc=0.5)
+algo = RAOStar(model, cc=0.0001)
 
 b_init = {(quad_init, guest_init): 1.0} # initialize belief state 
 
