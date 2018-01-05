@@ -32,6 +32,8 @@ class Simulator(object):
         self.guest_poly = None
         # self.C.bind_all('<space>', self.key_press)
         self.C.bind_all('<w>', self.key_press)
+        self.C.bind_all('<a>', self.key_press)
+        self.C.bind_all('<d>', self.key_press)
         self.C.bind_all('<s>', self.key_press)
         self.key = 0
         self.policy = policy
@@ -94,6 +96,26 @@ class Simulator(object):
                                                     fill="", width=2)
         self.agent_poly = self.C.create_oval(center_x - min_size, center_y - min_size, center_x + min_size, center_y + min_size, outline="red",
                                              fill="red", width=2)
+
+    def update_agent(self, node):
+        print('risk', self.model.state_risk(node.state))
+        min_size = 5
+        center_x, center_y = self.convert_coords(
+            float(node.state.agent_mean_b[0]), float(node.state.agent_mean_b[1]))
+        width_x = max(min_size, float(
+            node.state.agent_sigma_b[0, 0]) * self.gs)
+        width_y = max(min_size, float(
+            node.state.agent_sigma_b[1, 1]) * self.gs)
+        x = center_x - width_x
+        y = center_y - width_y
+
+        # self.agent_poly_stddev = self.C.create_oval(x, y, x + width_x * 2, y + width_y * 2, outline = "gray",
+#                                             fill="", width=2)
+# self.agent_poly = self.C.create_oval(center_x - min_size, center_y - min_size, center_x + min_size, center_y + min_size, outline="red",
+#                                      fill="red", width=2)
+
+        self.C.coords(self.agent_poly, (center_x - min_size, center_y -
+                                        min_size, center_x + min_size, center_y + min_size))
 
     def draw_next_action(self, node):
         center_x, center_y = self.convert_coords(
@@ -212,20 +234,32 @@ class Simulator(object):
         self.current_state = newstate[0]
 
     def key_press(self, event=None):
-        if event.char == 'w':
-            if self.done_policy:
-                self.master.quit()
-            else:
+        if self.done_policy:
+            self.master.quit()
+        else:
+            if event.char == 'w':
                 self.current_state = most_likely_next_state(
                     self.graph, self.model, self.current_state)
                 self.draw_ego(self.current_state)
-                self.draw_agent(self.current_state)
+                self.update_agent(self.current_state)
                 self.draw_next_action(self.current_state)
                 self.master.update()
 
-        elif event.char == 's':
-            self.event = 0
-            print('pressed s')
+            elif event.char == 'a':
+                self.current_state = agent_move_next_state(
+                    self.graph, self.model, self.current_state, "LEFT")
+                self.draw_ego(self.current_state)
+                self.update_agent(self.current_state)
+                self.draw_next_action(self.current_state)
+                self.master.update()
+
+            elif event.char == 'd':
+                self.current_state = agent_move_next_state(
+                    self.graph, self.model, self.current_state, "RIGHT")
+                self.draw_ego(self.current_state)
+                self.update_agent(self.current_state)
+                self.draw_next_action(self.current_state)
+                self.master.update()
 
     def start_sim(self):
         self.master.mainloop()

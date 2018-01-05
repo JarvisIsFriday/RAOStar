@@ -51,12 +51,39 @@ def next_child(G, state):
     return next_child
 
 
+def next_child_agent_action(G, state, agent_action):
+    next_child = None
+    most_probable = 0
+    print('current', state.state.state_print())
+    for i, child in enumerate(G.hyperedge_successors(state, state.best_action)):
+        if child.best_action:
+            print(i, child, child.state.state_print(),
+                  child.state.previous_action, child.best_action.name)
+        if agent_action in child.state.previous_action:
+            # print('found a match')
+            next_child = child
+            # break
+    if state.best_action:
+        print("   action: " + str(state.best_action.name.split("'")[1]))
+        print("next state: " + str(next_child.state.state_print()))
+    else:
+        print('## Policy complete ##')
+    return next_child
+
+
 import copy
 
 
 def most_likely_next_state(G, model, node):
     # print('current node:', node.state.state_print())
     next_state = next_child(G, node)
+    # print('next node:', node)
+    return next_state
+
+
+def agent_move_next_state(G, model, node, agent_action):
+    # print('current node:', node.state.state_print())
+    next_state = next_child_agent_action(G, node, agent_action)
     # print('next node:', node)
     return next_state
 

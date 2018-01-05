@@ -89,7 +89,7 @@ class RAOStarGraphNode(GraphElement):
         self.probability = 0.0
 
     def set_prob(self, prob):
-        self.probability = prob 
+        self.probability = prob
 
     def set_depth(self, new_depth):
         """Sets new non-negative depth"""

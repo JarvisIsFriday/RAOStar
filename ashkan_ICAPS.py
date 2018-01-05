@@ -6,28 +6,35 @@ from iterative_raostar import *
 from icaps_sim import *
 import numpy as np
 import sys
+import graph_to_json
 
 if __name__ == '__main__':
     # min_distance = 1
     # print('risk', risk_for_two_gaussians(1, 0.5, 2.5, 0.5, min_distance))
 
     # default cc value
-    cc = 0.5
+    cc = 0.4
     if len(sys.argv) > 1:
         cc = float(sys.argv[1])
 
     model = Ashkan_ICAPS_Model(str(cc * 100) + "% risk")
-    algo = RAOStar(model, cc=cc, debugging=False, ashkan_continuous=True)
+    algo = RAOStar(model, cc=cc, debugging=False,
+                   cc_type='e', ashkan_continuous=True)
 
     agent_coords = [6, 9]
-    agent_coords = [6, 6]
+    agent_coords = [7, 3]
 
-    b0 = ContinuousBeliefState(1, 1)
+    b0 = ContinuousBeliefState(9, 1)
     b0.set_agent_coords(agent_coords[0], agent_coords[1])
     P, G = algo.search(b0)
 
     most_likely_policy(G, model)
     Sim = Simulator(10, 10, G, P, model, grid_size=50)
+
+    # Convert all matrices to strings for json
+    # print(G)
+
+    gshow = graph_to_json.policy_to_json(G, 0.5, 'results/ashkan_9_1.json')
 
     # code to draw the risk grid
     # for i in range(11):

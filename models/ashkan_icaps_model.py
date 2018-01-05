@@ -24,7 +24,7 @@ class Ashkan_ICAPS_Model(object):
     def __init__(self, name="unnamed model"):
         self.vel = 3
         self.name = name
-        self.dynamic_obs_min_dist = 1
+        self.dynamic_obs_min_dist = 1.5
 
         # environment size (x,y)
         # model walls as risks
@@ -98,21 +98,21 @@ class Ashkan_ICAPS_Model(object):
         # print('state_risk:' + str(state.state_print()) + " {0:.2f}".format(risk))
         return max([static_risk, dynamic_risk])
 
-    def costs(self, action):
+    def costs(self, state, action):
         '''
         Treating all ego actions as uniform cost, not trying to guide behavior
         '''
         # TODO - Matt fix this, should be distance traveled between previous
         # state
-        return 3
+        return 2
 
     def values(self, state, action):
         # return value (heuristic + cost)
         # if self.is_terminal(state):
             # return 0
 
-        return self.costs(action)
-        # return self.costs(action) + self.heuristic(state)
+        # return self.costs(state, action)
+        return self.costs(state, action) + self.heuristic(state)
 
     def heuristic(self, state):
         # square of euclidean distance as heuristic
@@ -125,7 +125,7 @@ class Ashkan_ICAPS_Model(object):
         # print('h state', state)
         # distance_to_goal_corner = np.sqrt((state.mean_b[0] - self.goal_x)**2)
         distance_to_goal_corner = np.sqrt(
-            (state.mean_b[0] - (self.goal_area[0] + 1))**2 + (state.mean_b[1] - (self.goal_area[1] + 1))**2)
+            (state.mean_b[0] - (self.goal_area[0] + 1.5))**2 + (state.mean_b[1] - (self.goal_area[1] + 1.5))**2) - 2
         return distance_to_goal_corner
         # return np.sqrt(sum([(self.goal[i] - state[0][i])**2 for i in
         # range(2)]))
