@@ -12,6 +12,8 @@ from raostar import RAOStar
 
 import graph_to_json
 
+from iterative_raostar import *
+
 #### Run RAO star on Scenario ####
 # Simulation conditions 
 world_size = (7,7) # note the boundaries are walls 
@@ -22,7 +24,7 @@ guest_init = (3,1,90,0)
 # note the boundary of the world (ex anything with row column 0 and the upper bound)
 # is the wall
 model = QuadModel(world_size, goal_state)
-algo = RAOStar(model, cc=0.1)
+algo = RAOStar(model, cc=0.5, debugging=False)
 
 b_init = {(quad_init, guest_init): 1.0} # initialize belief state 
 
@@ -37,5 +39,7 @@ P, G = algo.search(b_init)
 # print(P_notNone)
 
 # # print out the policy for each state of guest 
-gshow = graph_to_json.policy_to_json(G, 0.1, 'quadraos.json')
+# most_likely_policy(G, model)
+
+gshow = graph_to_json.policy_to_json(G, 0.5, 'quadraos.json')
 

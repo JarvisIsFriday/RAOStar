@@ -83,7 +83,7 @@ class QuadModel(object):
 
 	def costs(self, action):
 		if action == "turn-right-45" or action == "turn-left-45":
-			return 2 # bias in going forward 
+			return 0 # bias in going forward 
 		else:
 			return 1.5
 

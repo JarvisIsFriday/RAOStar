@@ -46,14 +46,12 @@ def node_info(node_object, cc):
 def policy_to_json(G, cc, filename, settings=default_settings):
     graph_info = {"nodes": {}, "edges": {}, "settings": settings}
     graph_info["nodes"]["node-0"] = node_info(G.root, cc)
-    print(graph_info["nodes"]["node-0"]['state'])
     added_nodes = {G.root.name: 'node-0'}  # node.name: node-i
     queue = deque([G.root])
     n_ind = 1  # nodes str index
     e_ind = 0  # edges str index
     while len(queue) > 0:
         node = queue.popleft()
-        print('node', node.state, type(node.state))
         if node.best_action != None:
             children = G.hyperedges[node][node.best_action]
             edge_str = "edge-%d" % (e_ind)
@@ -71,13 +69,9 @@ def policy_to_json(G, cc, filename, settings=default_settings):
                     nodestr = added_nodes[c.name]
                 graph_info["nodes"][nodestr] = node_info(c, cc)
                 n_ind += 1
-                print(c.name, c.probability)
                 e_info["successors"][nodestr] = {"probability": c.probability}
             graph_info["edges"][edge_str] = e_info
             e_ind += 1
-    # print(added_nodes)
-    # print(graph_info)
-
     with open(filename, 'w') as fjson:
         json.dump(graph_info, fjson)
     return graph_info
