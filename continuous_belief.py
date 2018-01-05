@@ -14,6 +14,7 @@ from matplotlib.collections import LineCollection
 sigma_w = 0.07
 sigma_v = 0.05
 sigma_b0 = 0.01
+agent_sigma_b0 = 0.05
 
 sigma_w = 0.03
 sigma_v = 0.02
@@ -77,15 +78,24 @@ class ContinuousBeliefState(object):
         self.mean_b[3] = v_y
         self.belief = self
 
+        self.agent_mean_b = np.zeros([self.nn, 1])
+        self.agent_sigma_b = np.zeros([self.nn, self.nn])
+
         self.sigma_b = np.zeros([self.nn, self.nn])
         for i in range(self.n):
             self.sigma_b[i][i] = sigma_b0
+            self.agent_sigma_b[i][i] = agent_sigma_b0
         # print("\nmean_b0:\n", self.mean_b)
         # print("\nsigma_b0:\n", self.sigma_b)
         self.current_P = sigma_b0 * np.eye(n)
+        self.previous_action = None
 
     def __len__(self):
         return 7
+
+    def set_agent_coords(self, x, y):
+        self.agent_mean_b[0] = x
+        self.agent_mean_b[1] = y
 
     def state_print(self):
         return "ContBeliefState x:" + "{0:.2f}".format(float(self.mean_b[0])) + " y:" + "{0:.2f}".format(float(self.mean_b[1]))
@@ -96,6 +106,8 @@ class ContinuousBeliefState(object):
         new_belief_state.mean_b = self.mean_b
         new_belief_state.sigma_b = self.sigma_b
         new_belief_state.current_P = self.current_P
+        new_belief_state.agent_mean_b = self.agent_mean_b.copy()
+        new_belief_state.agent_sigma_b = self.agent_sigma_b.copy()
         return new_belief_state
 
 
@@ -160,6 +172,8 @@ def cont_belief_update(belief_state, control_input):
     new_belief_state.mean_b = new_m_b
     new_belief_state.sigma_b = new_sigma_b
     new_belief_state.current_P = new_P
+    new_belief_state.agent_mean_b = current_belief.agent_mean_b
+    new_belief_state.agent_sigma_b = current_belief.agent_sigma_b
 
     return new_belief_state
 

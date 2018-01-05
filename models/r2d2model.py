@@ -5,6 +5,7 @@
 # r2d2 model as simple model to test rao star
 
 import numpy as np
+from belief import BeliefState
 
 
 class R2D2Model(object):
@@ -74,10 +75,11 @@ class R2D2Model(object):
         return validActions
 
     def is_terminal(self, state):
-        # if state[1] == self.goal[1]:
-            # raise ValueError()
-        # print(state.keys[0])
-        return state[0] == self.goal[0] and state[1] == self.goal[1]
+        # For some reason we get a BeliefState here when deadend state found
+        if isinstance(state, BeliefState):
+            state = state.belief.keys()[0]
+        # Added fire state to terminal to differentiate it from deadends
+        return state[0] == self.goal[0] and state[1] == self.goal[1] or self.in_a_fire(state)
 
     def state_transitions(self, state, action):
         newstates = []

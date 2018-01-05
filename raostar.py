@@ -423,6 +423,8 @@ class RAOStar(object):
                 # Test if some action has been selected
                 if best_action_idx >= 0:
                     if (not np.isclose(best_Q, current_Q)) and self.is_better(best_Q, current_Q):
+                        print('current_Q', current_Q, 'best_Q', best_Q)
+
                         print(
                             'WARNING: node Q value improved, which might indicate inadmissibility.')
 

@@ -22,13 +22,14 @@ from continuous_belief import *
 
 class Ashkan_ICAPS_Model(object):
     def __init__(self, name="unnamed model"):
-        self.vel = 2
+        self.vel = 3
         self.name = name
+        self.dynamic_obs_min_dist = 1.5
 
         # environment size (x,y)
         # model walls as risks
         # goal specify direction as well as coordinate (x,y,thet)
-        self.goal_area = [8, 8]
+        self.goal_area = [7, 7]
         self.max_coords = [10, 10]
         # self.goal_area = [5, 5]
 
@@ -59,35 +60,59 @@ class Ashkan_ICAPS_Model(object):
     def state_transitions(self, state, action):
         '''The uncontollable agent obstacle can move left [-1,0] or right [1,0]
         each time step with equal probability'''
-        new_states = []
+
         control_input = [[action[1]], [action[2]]]
-        new_states.append(
-            [cont_belief_update(state, control_input), 1.0])
-        # print(new_states[0][0].mean_b)
-        # print(new_states)
-        return new_states
+        ego_state_updated = cont_belief_update(state, control_input)
+
+        # solution without the dynamic agent moving/branching
+        # return [[ego_state_updated, 1.0],]
+
+        # solution with 50/50 branching for agent
+        agent_state_branches = self.agent_branching5050(ego_state_updated)
+
+        return agent_state_branches
+
+    def agent_branching5050(self, state):
+        '''Apply the uncontrolled dynamic obstacle movements to get a distribution of belief states to condition on'''
+        num_branches = 2
+        # print('branching 5050')
+        left_state = state.copy()
+        left_state.agent_mean_b[0] = left_state.agent_mean_b[0] - 1
+        left_state.previous_action = "LEFT"
+        right_state = state.copy()
+        # print('right state before ', right_state.agent_mean_b)
+
+        right_state.agent_mean_b[0] = right_state.agent_mean_b[0] + 1
+        right_state.previous_action = "RIGHT"
+        # print('right state after ', right_state.agent_mean_b)
+
+        return [[left_state, 0.5], [right_state, 0.5]]
 
     def observations(self, state):
         return [(state, 1.0)]  # assume observations is deterministic
 
     def state_risk(self, state):
-        risk = static_obs_risk(state)
+        static_risk = static_obs_risk(state)
+        dynamic_risk = dynamic_obs_risk(state, self.dynamic_obs_min_dist)
+        # print('dynamic_risk', dynamic_risk)
         # print('state_risk:' + str(state.state_print()) + " {0:.2f}".format(risk))
-        return risk
+        return max([static_risk, dynamic_risk])
 
-    def costs(self, action):
+    def costs(self, state, action):
         '''
         Treating all ego actions as uniform cost, not trying to guide behavior
         '''
+        # TODO - Matt fix this, should be distance traveled between previous
+        # state
         return 2
 
     def values(self, state, action):
         # return value (heuristic + cost)
-        if self.is_terminal(state):
-            return 0
+        # if self.is_terminal(state):
+            # return 0
 
-        return self.costs(action)
-        # return self.costs(action) + self.heuristic(state)
+        # return self.costs(state, action)
+        return self.costs(state, action) + self.heuristic(state)
 
     def heuristic(self, state):
         # square of euclidean distance as heuristic
@@ -95,18 +120,53 @@ class Ashkan_ICAPS_Model(object):
             state = state
         else:
             state = state.state
-        if self.is_terminal(state):
-            return 0
+        # if self.is_terminal(state):
+            # return 0
         # print('h state', state)
         # distance_to_goal_corner = np.sqrt((state.mean_b[0] - self.goal_x)**2)
         distance_to_goal_corner = np.sqrt(
-            (state.mean_b[0] - (self.goal_area[0] + 1))**2 + (state.mean_b[1] - (self.goal_area[1] + 1))**2)
+            (state.mean_b[0] - (self.goal_area[0] + 1.5))**2 + (state.mean_b[1] - (self.goal_area[1] + 1.5))**2) - 2
         return distance_to_goal_corner
         # return np.sqrt(sum([(self.goal[i] - state[0][i])**2 for i in
         # range(2)]))
 
     def execution_risk_heuristic(self, state):
         return 0  # don't have a good heuristic for this yet
+
+
+def risk_for_two_gaussians(mu1, std1, mu2, std2, min_distance):
+    new_mu = mu1 - mu2
+    new_std = std1 + std2
+    # print('here2', mu1, std1, mu2, std2)
+    # print('new', new_mu, new_std)
+    risk = norm.cdf(min_distance, new_mu, new_std) - \
+        norm.cdf(-min_distance, new_mu, new_std)
+    # print('risk', risk)
+    return risk
+
+
+def dynamic_obs_risk_coords(ego_xy, ego_std, agent_xy, agent_std, min_distance):
+    ego_xy = np.array(ego_xy)
+    ego_std = np.array(ego_std)
+    agent_xy = np.array(agent_xy)
+    agent_std = np.array(agent_std)
+    # print('agent_xy', agent_xy)
+    # print('agent_std', agent_std)
+
+    # print('here1', np.array(ego_xy), ego_std, agent_xy, agent_std)
+
+    risks = [risk_for_two_gaussians(ego_xy[0, 0], ego_std[0][0], agent_xy[0][0], agent_std[0][0], min_distance),
+             risk_for_two_gaussians(ego_xy[0][1], ego_std[1][1], agent_xy[0][1], agent_std[1][1], min_distance)]
+    # print('risks:', risks)
+    return min(risks)
+
+
+def dynamic_obs_risk(belief_state, min_distance):
+    ego_xy = belief_state.mean_b[0:2].T
+    ego_std = np.sqrt(belief_state.sigma_b[0:2, 0:2])
+    agent_xy = belief_state.agent_mean_b[0:2].T
+    agent_std = np.sqrt(belief_state.agent_sigma_b[0:2, 0:2])
+    return dynamic_obs_risk_coords(ego_xy, ego_std, agent_xy, agent_std, min_distance)
 
 
 a1 = 2
