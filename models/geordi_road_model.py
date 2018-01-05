@@ -23,21 +23,31 @@ class RoadModel(object):
             "max": open_interval[1],
             "wall": wall}
 
+    def get_lane_right(self, lane_num):
+        if self.lanes[str(lane_number)]['wall']:
+            raise ValueError(
+                'Starting right_lane check from divide, not a lane')
+        right_lane_num = str(int(lane_number) + 2)
+        if right_lane_num not in self.lanes:
+            raise ValueError(
+                'should not be checking right_lane proximity after right_open was False')
+        return int(right_lane_num)
+
     def right_open(self, position, lane_number):
         if self.lanes[str(lane_number)]['wall']:
             raise ValueError(
-                'Starting right_open check from divide, not a lane')
+                'Starting right_lane check from divide, not a lane')
         right_divide_num = str(int(lane_number) + 1)
         right_lane_num = str(int(lane_number) + 2)
         if right_lane_num not in self.lanes or right_divide_num not in self.lanes:
             return False
-        right_divide = self.lanes(right_divide_num)
-        right_lane = self.lanes(right_lane_num)
-        if self.in_open_interval(right_divide) and self.in_open_interval(right_lane):
+        right_divide = self.lanes[right_divide_num]
+        right_lane = self.lanes[right_lane_num]
+        if self.in_open_interval(right_divide, position) and self.in_open_interval(right_lane, position):
             return True
         return False
 
-    def left_open(self,):
+    def left_open(self, position, lane_number):
         if self.lanes[str(lane_number)]['wall']:
             raise ValueError(
                 'Starting left_open check from divide, not a lane')
@@ -45,17 +55,24 @@ class RoadModel(object):
         left_lane_num = str(int(lane_number) - 2)
         if left_lane_num not in self.lanes or left_divide_num not in self.lanes:
             return False
-        left_divide = self.lanes(left_divide_num)
-        left_lane = self.lanes(left_lane_num)
-        if self.in_open_interval(left_divide) and self.in_open_interval(left_lane):
+        left_divide = self.lanes[left_divide_num]
+        left_lane = self.lanes[left_lane_num]
+        if self.in_open_interval(left_divide, position) and self.in_open_interval(left_lane, position):
             return True
         return False
+
+    def valid_forward(self, finish_x, lane_num):
+        return self.in_open_interval(self.lanes[str(lane_num)], finish_x)
 
     def in_open_interval(self, lane_data, position):
         if position >= lane_data['min'] and position <= lane_data['max']:
             return True
         return False
 
+
+##################################
+# Road model visualization tools #
+##################################
 
 def plot_road_model(model):
     # Set the HEIGHT and WIDTH of the screen
@@ -164,6 +181,10 @@ def draw_dashed_line(surf, color, start_pos, end_pos, width=1, dash_length=10):
             pygame.draw.line(surf, color, start.get(), end.get(), width)
 
 
+#######################
+# Road model examples #
+#######################
+
 def highway_2_lanes_offramp_ex():
     '''Example showing how to create an explicit cc-MDP with the new model format.
      A simple path planning in a 3 x 2 grid (with no loops).
@@ -173,9 +194,8 @@ def highway_2_lanes_offramp_ex():
       lane-2
       ----------------------
             \ lane-exit
-              --------------
-     L1 cell is the start location, L5 is a crash location, and L6 is the goal location.
-     The objective is to minimize the cost.'''
+              --------------'''
+
     new_road = RoadModel(200)
     new_road.add_road_lane(0, "wall-inner", (0, 0), True)
     new_road.add_road_lane(1, "lane-1", (0, 200))

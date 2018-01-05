@@ -11,21 +11,34 @@ from geordi_road_model import *
 
 road_model = highway_2_lanes_offramp_ex()
 print(road_model)
-plot_road_model(road_model)
+# plot_road_model(road_model)
 
-ego_vehicle = VehicleModel(
-    "ego", {'road': 'one', 'x': 0, 'y': 0, 'v': 0, 'theta': 0})
+ego_vehicle = VehicleModel('Ego', VehicleState(
+    state={'lane_num': 1, 'x': 0, 'y': 0, 'v': 5, 'theta': 0}), isControllable=True)
 
-agent_vehicle1 = VehicleModel(
-    "agent1", {'road': 'two', 'x': 0, 'y': 0, 'v': 0, 'theta': 0})
+agent1_vehicle = VehicleModel('Agent1', VehicleState(
+    state={'lane_num': 3, 'x': 0, 'y': 0, 'v': 5, 'theta': 0}))
 
-move_forward = ActionModel("forward")
-ego_vehicle.add_action(move_forward)
+agent2_vehicle = VehicleModel('Agent2', VehicleState(
+    state={'lane_num': 3, 'x': 5, 'y': 0, 'v': 5, 'theta': 0}))
 
-move_forward_agent = ActionModel("forward")
-agent_vehicle1.add_action(move_forward_agent)
+ego_vehicle.add_action(move_forward_action(ego=True))
+ego_vehicle.add_action(merge_left_action(ego=True))
+ego_vehicle.add_action(merge_right_action(ego=True))
+
+agent1_vehicle.add_action(move_forward_action())
+agent2_vehicle.add_action(move_forward_action())
+agent2_vehicle.add_action(merge_left_action())
+agent2_vehicle.add_action(merge_right_action())
 
 # geordi_model = GeordiModel()
-geordi_model = GeordiModel([ego_vehicle, agent_vehicle1])
+geordi_model = GeordiModel(
+    [ego_vehicle, agent1_vehicle, agent2_vehicle], road_model)
+print(geordi_model.road_model)
+actions = geordi_model.get_available_actions(geordi_model.current_state)
+print(actions)
+print(agent1_vehicle.action_list[0].precondition_check(agent1_vehicle.name,
+                                                       geordi_model.current_state, geordi_model))
+geordi_model.state_transitions(geordi_model.current_state, actions[0])
 # geordi_model.add_vehicle_model(ego_vehicle)
 # geordi_model.add_vehicle_model(agent_vehicle1)
