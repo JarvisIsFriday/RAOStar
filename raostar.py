@@ -68,7 +68,7 @@ class RAOStar(object):
 
         self.start_time = 0.0
 
-        # functions from model (Model function aliases)
+        # API functions from model (Model function aliases) #
         self.A = model.actions
         self.T = model.state_transitions
         self.O = model.observations

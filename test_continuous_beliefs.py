@@ -1,5 +1,7 @@
 
 from belief import *
+import numpy as np
+from continuous_belief import *
 
 a1 = 2
 bb1 = -2

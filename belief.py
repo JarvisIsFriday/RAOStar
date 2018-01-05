@@ -3,7 +3,9 @@
 # slimmed it down and simplify
 
 # author: Yun Chang
-# yunchang@mit.edu
+# yunchang@mit.
+
+import numpy as np
 
 import numpy as np
 
