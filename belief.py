@@ -195,6 +195,7 @@ def compute_observation_distribution(pred_belief, pred_belief_safe, O):
 
                         # Accumulates the probabilities
                         sum_probs[i] += obs_prob * particle_prob
+    print('distribs', obs_distribution, obs_distribution_safe, state_to_obs)
 
     return obs_distribution, obs_distribution_safe, state_to_obs
 

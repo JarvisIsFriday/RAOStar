@@ -8,6 +8,7 @@ from utils import import_models
 import_models()
 from vehicle_model import *
 from geordi_road_model import *
+from raostar import RAOStar
 
 road_model = highway_2_lanes_offramp_ex()
 print(road_model)
@@ -39,6 +40,26 @@ actions = geordi_model.get_available_actions(geordi_model.current_state)
 print(actions)
 print(agent1_vehicle.action_list[0].precondition_check(agent1_vehicle.name,
                                                        geordi_model.current_state, geordi_model))
-geordi_model.state_transitions(geordi_model.current_state, actions[0])
+
+new_states = geordi_model.state_transitions(
+    geordi_model.current_state, actions[0])
+
+print('new_states', new_states)
+
+algo = RAOStar(geordi_model, cc=0.1, debugging=True, cc_type='o')
+
+b_init = {geordi_model.current_state: 1.0}
+P, G = algo.search(b_init)
+print(P)
+
+# permutations = calculate_permutations(
+#     geordi_model, geordi_model.current_state, agent2_vehicle.action_list, 5)
+
+# print(len(permutations))
+# print(permutations)
+
+# for p in permutations:
+# print(p['actions'])
+
 # geordi_model.add_vehicle_model(ego_vehicle)
 # geordi_model.add_vehicle_model(agent_vehicle1)
