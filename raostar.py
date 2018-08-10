@@ -21,7 +21,7 @@ class RAOStar(object):
     # find optimal policy and/or tree representing partially
     # observable domains
 
-    def __init__(self, model, cc=0.0, cc_type='o',
+    def __init__(self, model, cc=0.0, cc_type='o', fixed_horizon=np.inf,
                  terminal_prob=1.0, debugging=False, randomization=0.0, halt_on_violation=False, ashkan_continuous=False):
 
         self.model = model
@@ -39,7 +39,8 @@ class RAOStar(object):
         self.continuous_belief = ashkan_continuous
         self.debugging = debugging
 
-        self.end_search_on_likelihood = True
+        self.fixed_horizon = fixed_horizon
+        self.end_search_on_likelihood = False
 
         self.debug("halting", self.halt_on_violation)
 
@@ -188,6 +189,17 @@ class RAOStar(object):
             # change)
             if is_terminal_belief(b, self.term, self.terminal_prob):
                 self.set_terminal_node(node)
+            elif node.depth == self.fixed_horizon:
+
+                # self.set_terminal_node(node)
+                node.value = avg_func(b, self.h)
+                node.terminal = True  # new node is non terminal
+                node.best_action = None  # no action associated yet
+                node.exec_risk_bound = bound_prob(
+                    er_bound)  # execution risk bound
+                # avg heuristic estimate of execution risk at node
+                node.set_exec_risk(node.risk)
+                node.risk_upper = node.exec_risk                
             else:
                 # the value of a node is the average of the heuristic only when it's
                 # first created. After that, the value is given as a function of
@@ -258,7 +270,7 @@ class RAOStar(object):
                     print(n.state.state_print(), n.likelihood,
                           parent_l, transition)
 
-                    n.likelihood += parent_l * transition
+                    n.likelihood = parent_l * transition
                     if n not in expanded:
                         queue.append(n)
             else:  # no best action has been assigned yet
@@ -303,9 +315,12 @@ class RAOStar(object):
     def expand_best_partial_solution(self):
         # expands a node in the graph currently contained in the best
         # partial solution. Add new nodes and edges on the graph
-        nodes_to_expand = self.opennodes
-        self.opennodes = None
 
+        # nodes_to_expand = self.opennodes
+        # self.opennodes = None
+
+        nodes_to_expand = [self.choose_node()]  # choose best node
+        
         for node in nodes_to_expand:
             self.debug('\n ******* expanding node *******')
             self.debug(node.state.state_print())
@@ -433,7 +448,7 @@ class RAOStar(object):
                 er_bound = min([node.exec_risk_bound, self.er_cap])
                 if self.cc_type == 'everywhere':
                     er_bound = self.er_cap
-                print(er_bound)
+                    
                 best_action_idx = -1
                 best_Q = self.initial_Q  # -inf or inf based on optimization
                 best_D = -1  # depth

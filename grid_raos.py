@@ -30,7 +30,7 @@ if __name__ == '__main__':
     constraint_states = [(0,1),(1,1),(3,3),(4,3),(0,4)]
     model = GRIDModel(size, constraint_states, prob_right_transition=0.98, prob_right_observation=0.98)
 
-    algo = RAOStar(model, cc=cc, debugging=True, cc_type='o')
+    algo = RAOStar(model, cc=cc, debugging=True, cc_type='o', fixed_horizon = 3)
 
     b_init = {(0,0): 1.0}
     state = (0,0)
