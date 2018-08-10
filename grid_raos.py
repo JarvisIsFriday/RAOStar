@@ -21,7 +21,7 @@ from scipy.interpolate import interp1d
 # Now you can give command line cc argument after filename
 if __name__ == '__main__':
     # default chance constraint value
-    cc = 0.08
+    cc = 0.02
     if len(sys.argv) > 1:
         cc = float(sys.argv[1])
 
@@ -30,7 +30,7 @@ if __name__ == '__main__':
     constraint_states = [(0,1),(1,1),(3,3),(4,3),(0,4)]
     model = GRIDModel(size, constraint_states, prob_right_transition=0.98, prob_right_observation=0.98)
 
-    algo = RAOStar(model, cc=cc, debugging=True, cc_type='o', fixed_horizon = 3)
+    algo = RAOStar(model, cc=cc, debugging=False, cc_type='o', fixed_horizon = 3, random_node_selection=True)
 
     b_init = {(0,0): 1.0}
     state = (0,0)

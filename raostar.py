@@ -10,6 +10,7 @@
 import operator
 import numpy as np
 import time
+import random
 from collections import deque
 
 from raostarhypergraph import RAOStarGraphNode, RAOStarGraphOperator, RAOStarHyperGraph
@@ -22,7 +23,7 @@ class RAOStar(object):
     # observable domains
 
     def __init__(self, model, cc=0.0, cc_type='o', fixed_horizon=np.inf,
-                 terminal_prob=1.0, debugging=False, randomization=0.0, halt_on_violation=False):
+                 terminal_prob=1.0, debugging=False, randomization=0.0, halt_on_violation=False, random_node_selection=False):
 
         self.model = model
         self.cc = cc
@@ -39,6 +40,7 @@ class RAOStar(object):
         self.debugging = debugging
 
         self.fixed_horizon = fixed_horizon
+        self.random_node_selection = random_node_selection
         self.end_search_on_likelihood = False
 
         self.debug("halting", self.halt_on_violation)
@@ -627,7 +629,10 @@ class RAOStar(object):
         # chooses an element from open list to be expanded
         if len(self.opennodes) > 1:
             # selects best node to expand
-            node = self.select_best(self.opennodes)  # select best node
+            if self.random_node_selection is True:
+                node = random.sample(self.opennodes,1)[0]  # select random node
+            else:
+                node = self.select_best(self.opennodes)  # select best node
             self.opennodes.remove(node)
         else:  # if there is only one, use that one
             node = self.opennodes.pop()
