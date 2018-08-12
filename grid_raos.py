@@ -8,7 +8,7 @@ import sys
 from utils import import_models
 import_models()
 from grid_model import GRIDModel
-from raostar import RAOStar
+from raostar_enum import RAOStar
 import graph_to_json
 import time
 import copy
@@ -30,7 +30,7 @@ if __name__ == '__main__':
     constraint_states = [(0,1),(1,1),(3,3),(4,3),(0,4)]
     model = GRIDModel(size, constraint_states, prob_right_transition=0.98, prob_right_observation=0.98)
 
-    algo = RAOStar(model, cc=cc, debugging=False, cc_type='o', fixed_horizon = 3, random_node_selection=True)
+    algo = RAOStar(model, cc=cc, debugging=False, cc_type='o', fixed_horizon = 2, random_node_selection=True)
 
     b_init = {(0,0): 1.0}
     state = (0,0)

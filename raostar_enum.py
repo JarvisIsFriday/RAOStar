@@ -49,6 +49,8 @@ class RAOStar(object):
         self.random_node_selection = random_node_selection
         self.end_search_on_likelihood = False
 
+        self.incumbent_policy = None
+
         self.debug("halting", self.halt_on_violation)
 
         # execution risk cap
@@ -71,6 +73,7 @@ class RAOStar(object):
                 n_list, key=lambda expansion: expansion['expansion_node'].value)
             self.select_best_hyperedge = lambda n_list: max(
                 n_list, key=lambda expansion: expansion['expansion_hyperedge'].op_value)
+            self.incumbent_value = -np.inf
             
         elif model.optimization == 'minimize':
             self.is_better = operator.lt
@@ -80,6 +83,7 @@ class RAOStar(object):
                 n_list, key=lambda expansion: expansion['expansion_node'].value)
             self.select_best_hyperedge = lambda n_list: min(
                 n_list, key=lambda expansion: expansion['expansion_hyperedge'].op_value)
+            self.incumbent_value = np.inf
             
         else:
             raise TypeError('unable to recognize optimization')
@@ -114,40 +118,51 @@ class RAOStar(object):
         self.start_time = time.time()
         print('\n RAO* initialized with belief: ' + str(b0) + '\n .\n .\n .')
         self.init_search(b0)
+
+        # choose first expansion 
+        expansion = self.choose_expansion()
+        
         count = 0
         root = self.graph.root
-        # initial objective at the root, which is the best possible
-        # (can only degrade with admissible heuristic)
-        prev_root_val = np.inf if (
-            self.model.optimization == 'maximize') else -np.inf
+
         interrupted = False
 
         while not self.search_termination(count, iter_limit, time_limit):
             count += 1
 
             self.debug('\n\n\n RAO* iteration: ' + str(count) + '\n\n\n')
-            self.debug('opennodes', self.opennodes)
 
-            expanded_nodes = self.expand_best_partial_solution()
-            self.update_values_and_best_actions(expanded_nodes)
-            # best actions aka policy
-            # Updates the mapping of ancestors on the best policy graph and the
-            # list of open nodes
-            self.update_policy_open_nodes()
-            root_value = root.value
-            # root node changed from its best value
-            if not np.isclose(root_value, prev_root_val):
-                # if the hpeuristic is admissible, the root value can only
-                # degrade
-                if self.is_better(root_value, prev_root_val):
-                    print('Warning: root value improved. Check admissibility')
-                else:
-                    prev_root_val = root_value
+            # if chosen expansion is for another etree node, then recover the graph for that node.
+            if self.current_etree_node != expansion['current_etree_node']:
+                target_etree_node = expansion['current_etree_node']
+                self.etree.checkout(self.current_etree_node, target_etree_node)
+                self.current_etree_node = target_etree_node
+                
+            expanded_etree_node = self.expand_etree_node(expansion)
+
+            # update queue
+            is_queue_updated = self.update_queue()
+
+            if is_queue_updated:
+                expansion = self.choose_expansion()                
+
+            else:
+                if self.graph.root.terminal != True:  # if solution is feasible
+                    # if current feasible solution is better than incumbent, set it as incumbent
+                    self.is_better(self.graph.root.value, self.incumbent_value)
+                    self.set_incumbent()
+
+                expansion = self.choose_expansion()                
+                    
+            
         print('\n RAO* finished planning in ' +
               "{0:.2f}".format(time.time() - self.start_time) + " seconds after " + str(count) + " iterations\n")
         policy = self.extract_policy()
 
         return policy, self.graph
+
+    def set_incumbent(self):
+        self.incumbent_value = self.graph.root.value
 
     def init_search(self, b0):
         # initializes the search fields (initialize enumeration tree with root node)
@@ -215,6 +230,23 @@ class RAOStar(object):
         node.set_best_action(None)
         self.graph.remove_all_hyperedges(node)  # terminal node has no edges
 
+    def set_deadend_terminal_node(self, node):
+        # set fields of a terminal node
+        b = node.state.belief 
+        
+        self.current_etree_node.diff[node]['deadend_checked'] = True
+        self.current_etree_node.increment_diff(node, 'value_diff', node.value, avg_func(b, self.h))
+        self.current_etree_node.increment_diff(node, 'exec_risk_diff', node.exec_risk, node.risk)
+        self.current_etree_node.increment_diff(node, 'prev_best_action', node.best_action, None)
+        self.current_etree_node.increment_diff(node, 'current_best_action', node.best_action, None)
+        
+        
+        node.set_terminal(True)
+        node.set_value(avg_func(b, self.h))
+        node.set_exec_risk(node.risk)
+        node.set_best_action(None)
+        self.graph.remove_all_hyperedges(node)  # terminal node has no edges
+        
     def update_queue(self):
         self.debug('\n\n******* updating queue list *******')
 
@@ -235,8 +267,8 @@ class RAOStar(object):
             parent_likelihood = node.likelihood  # likelihood that node is reached in policy
 
             # if node was expanded before, reuse prev operators
-            if node.has_operator():
-                ops = node.all_node_operators()
+            ops = self.graph.all_node_operators(node)
+            if len(ops)>0:
                 for op in ops:
                     prob_safe = op.properties['prob_safe']
                     children = self.graph.hyperedge_successors(node, op)
@@ -271,6 +303,8 @@ class RAOStar(object):
                             self.set_new_node(
                                 child_obj_list[c_idx], parent_depth + 1, 0.0, prob_list[c_idx], parent_likelihood)
 
+                        child_er_bounds = self.compute_exec_risk_bounds_etree(er_bound, risk_updating, children_updating, prob_safe_updating)
+                        
                         # updates the values of the execution risk for all children
                         # that will be added to the graph
                         for idx, child in enumerate(child_obj_list):
@@ -299,11 +333,11 @@ class RAOStar(object):
                     # self.debug('action not added')
                     # self.set_terminal_node(node)
 
-                    if not is_terminal_belief(node.state.belief, self.term, self.terminal_prob):
-                            self.mark_deadend(node)
+                    # if not is_terminal_belief(node.state.belief, self.term, self.terminal_prob):
+                    #         self.mark_deadend(node)
 
                     if not node.terminal:
-                        self.set_terminal_node(node)
+                        self.set_deadend_terminal_node(node)
 
         if len(queue_list)==0:
             return False
@@ -398,248 +432,433 @@ class RAOStar(object):
         else:
             return []
 
-    def expand_best_partial_solution(self):
-        # expands a node in the graph currently contained in the best
-        # partial solution. Add new nodes and edges on the graph
+    def expand_etree_node(self, expansion):
 
-        # nodes_to_expand = self.opennodes
-        # self.opennodes = None
+        # initialize new etree node and add it to the etree
+        new_etree_node = EnumTreeNode(self.current_etree_node)
+        self.etree.add_node(new_etree_node)
+        self.current_etree_node = new_etree_node
 
-        expansion = self.choose_expansion()
-
-        node = expansion['expansion_node']
+        exp_node = expansion['expansion_node']
+        exp_action = expansion['expansion_hyperedge']
+                
+        Z = self.build_ancestor_list(exp_node)
         
-        self.debug('\n ******* expanding node *******')
-        self.debug(node.state.state_print())
-        # print(node.state.state_print())
-        self.debug('******************************\n')
-        belief = node.state.belief  # belief state associated to the node
-        parent_risk = node.risk  # execution risk for current node
-        parent_bound = node.exec_risk_bound  # er bound for current node
-        parent_depth = node.depth  # dist of parent to root
-        parent_likelihood = node.likelihood  # likelihood that node is reached in policy
+        # updates the best action at the node
+        for node in Z:
+            self.debug('\nupdate values and best action: ' +
+                       str(node.state.state_print()))
+            self.debug('current Q: ', node.value, "\n")
 
-        if self.cc_type == 'everywhere':
-            parent_bound = self.cc
-
-        self.debug('compute_exec_risk_bounds: parent_bound ',
-                   parent_bound, ' parent_risk ', parent_risk)
-
-        # if the current node is guaranteed to violate constraints and a violation
-        # is set to halt process: make node terminal
-        if self.halt_on_violation and np.isclose(parent_risk, 1.0):
-            all_node_actions = []
-        else:
-            # else get the available actions from model
-            all_node_actions = self.get_all_actions(belief, self.A)
-
-        action_added = False  # flag if a new action has been added
-
-        if len(all_node_actions) > 0:
-            added_count = 0
-            for act in all_node_actions:
-                self.debug("\n", act)
-
-                child_obj_list, prob_list, prob_safe_list, new_child_idxs = self.obtain_child_objs_and_probs(belief, self.T, self.O, self.r, act)
-
-                # initializes the new child nodes
-                for c_idx in new_child_idxs:
-                    self.set_new_node(
-                        child_obj_list[c_idx], parent_depth + 1, 0.0, prob_list[c_idx], parent_likelihood)
-
-                # if parent bound Delta is ~ 1.0, the child nodes are guaranteed to have
-                # their risk bound equal to 1
-                if (not np.isclose(parent_bound, 1.0)):
-                    # computes execution risk bounds for the child nodes
-                    er_bounds, er_bound_infeasible = self.compute_exec_risk_bounds(parent_bound,
-                                                                                   parent_risk, child_obj_list, prob_safe_list)
-                else:
-                    er_bounds = [1.0] * len(child_obj_list)
-                    er_bound_infeasible = False
-
-                # Only creates new operator if all er bounds a non-negative
-                if not er_bound_infeasible:
-                    # updates the values of the execution risk for all children
-                    # that will be added to the graph
-                    for idx, child in enumerate(child_obj_list):
-                        child.exec_risk_bound = er_bounds[idx]
-
-                    # average instantaneous value (cost or reward)
-                    avg_op_value = avg_func(belief, self.V, act)
-
-                    act_obj = RAOStarGraphOperator(name=str(act), op_value=avg_op_value,
-                                                   properties={'prob': prob_list, 'prob_safe': prob_safe_list})
-                    # an "Action" object crerated
-                    # add edge (Action) to graph
-                    self.graph.add_hyperedge(
-                        parent_obj=node, child_obj_list=child_obj_list, prob_list=prob_list, op_obj=act_obj)
-
-                    action_added = True
-                    added_count += 1
-                else:
-                    self.debug(
-                        '  action not added - error bound infeasible')
-
-        if not action_added:
-            # self.debug('action not added')
-            # self.set_terminal_node(node)
-
-            if not is_terminal_belief(node.state.belief, self.term, self.terminal_prob):
-                    self.mark_deadend(node)
-
-            if not node.terminal:
-                self.set_terminal_node(node)
-
-        # returns the list of node either added actions to or marked terminal
-        return nodes_to_expand
-
-    def update_values_and_best_actions(self, expanded_nodes):
-        # updates the Q values on nodes on the graph and the current best policy
-        # for each expanded node at a time
-        self.debug('\n ****************************')
-        self.debug('Update values and best actions  ')
-        self.debug('****************************')
-
-        for exp_idx, exp_node in enumerate(expanded_nodes):
-            Z = self.build_ancestor_list(exp_node)
-            # updates the best action at the node
-            for node in Z:
-                self.debug('\nupdate values and best action: ' +
-                           str(node.state.state_print()))
-                self.debug('current Q: ', node.value, "\n")
-
-                # all actions available at that node
-                all_action_operators = [
-                ] if node.terminal else self.graph.all_node_operators(node)
+            if node == exp_node:
+                # set best action of current expanding node as current expanding action
+                # this is different from original RAO*, becuase we don't choose "best" action anymore.
+                all_action_operators = exp_action
+            else:
+                # get all actions available at that node, if the node is an ancestor of the expanding node
                 # get all actions (operators) of node from graph
-                # risk at the node's belief state (does no depend on the action
-                # taken)
-                risk = node.risk
-                # current *admissible* (optimistic) estimate of the node's Q
-                # value
-                current_Q = node.value
-                # execution risk bound. the execution risk cap depends on type of chance
-                # constraint being imposed
-                er_bound = min([node.exec_risk_bound, self.er_cap])
-                if self.cc_type == 'everywhere':
-                    er_bound = self.er_cap
-                    
-                best_action_idx = -1
-                best_Q = self.initial_Q  # -inf or inf based on optimization
-                best_D = -1  # depth
-                exec_risk_for_best = -1.0
+                all_action_operators = [] if node.terminal else self.graph.all_node_operators(node)
+            
+            # risk at the node's belief state (does no depend on the action
+            # taken)
+            risk = node.risk
+            # current *admissible* (optimistic) estimate of the node's Q
+            # value
+            current_Q = node.value
+            # execution risk bound. the execution risk cap depends on type of chance
+            # constraint being imposed
+            er_bound = min([node.exec_risk_bound, self.er_cap])
+            if self.cc_type == 'everywhere':
+                er_bound = self.er_cap
 
-                # Estimates value and risk of the current node for each
-                # possible action
-                for act_idx, act in enumerate(all_action_operators):
-                    probs = act.properties['prob']
-                    prob_safe = act.properties['prob_safe']
-                    children = self.graph.hyperedge_successors(node, act)
-                    # estimate Q of taking this action from current node. Composed of
-                    # current reward and the average reward of its children
-                    Q = act.op_value + \
-                        np.sum([p * child.value for (p, child)
+            best_action_idx = -1
+            best_Q = self.initial_Q  # -inf or inf based on optimization
+            best_D = -1  # depth
+            exec_risk_for_best = -1.0
+
+            # Estimates value and risk of the current node for each
+            # possible action
+            for act_idx, act in enumerate(all_action_operators):
+                probs = act.properties['prob']
+                prob_safe = act.properties['prob_safe']
+                children = self.graph.hyperedge_successors(node, act)
+                # estimate Q of taking this action from current node. Composed of
+                # current reward and the average reward of its children
+                Q = act.op_value + \
+                    np.sum([p * child.value for (p, child)
+                            in zip(probs, children)])
+                # Average child depth
+                D = 1 + np.sum([p * child.depth for (p, child)
                                 in zip(probs, children)])
-                    # Average child depth
-                    D = 1 + np.sum([p * child.depth for (p, child)
-                                    in zip(probs, children)])
 
-                    # compute an estimate of the er of taking this action from current node.
-                    # composed of the current risk and the avg execution risk
-                    # of its children
-                    if self.cc_type == 'overall':
-                        exec_risk = risk + (1.0 - risk) * np.sum([p * child.exec_risk for (p, child)
-                                                                  in zip(prob_safe, children)])
-                    # enforcing same risk bound at all steps in the policy
-                    elif self.cc_type == 'everywhere':
-                        exec_risk = risk
+                # compute an estimate of the er of taking this action from current node.
+                # composed of the current risk and the avg execution risk
+                # of its children
+                if self.cc_type == 'overall':
+                    exec_risk = risk + (1.0 - risk) * np.sum([p * child.exec_risk for (p, child)
+                                                              in zip(prob_safe, children)])
+                # enforcing same risk bound at all steps in the policy
+                elif self.cc_type == 'everywhere':
+                    exec_risk = risk
 
-                    self.debug('action: ' + act.name + ' children: ' + str(children[0].state.state_print()) +
-                               ' risk ' + str(exec_risk))
-                    self.debug('  act_op_value: ', act.op_value)
+                self.debug('action: ' + act.name + ' children: ' + str(children[0].state.state_print()) +
+                           ' risk ' + str(exec_risk))
+                self.debug('  act_op_value: ', act.op_value)
 
-                    for child in children:
-                        self.debug(' child_value: ', child.value)
+                for child in children:
+                    self.debug(' child_value: ', child.value)
 
-                    self.debug('  children Q: ' + str(Q))
+                self.debug('  children Q: ' + str(Q))
 
-                    # if execution risk bound has been violated or if Q value for this action is worse
-                    # than current best, we should definitely not select it.
-                    if (exec_risk > er_bound) or self.is_worse(Q, best_Q):
-                        select_action = False
-                        if(exec_risk > er_bound):
-                            self.debug(' Action pruned by risk bound')
-                    # if risk bound respected and Q value is equal or better
-                    else:
-                        select_action = True
-                    # Test if the risk bound for the current node has been
-                    # violated
-                    if select_action:
-                        # Updates the execution risk bounds for the children
-                        child_er_bounds, cc_infeasible = self.compute_exec_risk_bounds(
-                            er_bound, risk, children, prob_safe)
-                        for child in children:
-                            self.debug('  select_action: child ' + child.state.state_print() + " depth: " + str(child.depth) +
-                                       " risk bound: " + str(child.exec_risk_bound) + ' infeasible: ' + str(cc_infeasible))
-                        if not cc_infeasible:  # if chance constraint has not been violated
-                            for idx, child in enumerate(children):
-                                child.exec_risk_bound = child_er_bounds[idx]
+                # if execution risk bound has been violated or if Q value for this action is worse
+                # than current best, we should definitely not select it.
+                if (exec_risk > er_bound) or self.is_worse(Q, best_Q):
+                    select_action = False
+                    if(exec_risk > er_bound):
+                        self.debug(' Action pruned by risk bound')
+                # if risk bound respected and Q value is equal or better
+                else:
+                    select_action = True
+                # Test if the risk bound for the current node has been
+                # violated
+                if select_action:
+                    # Updates the execution risk bounds for the children
+                    # child_er_bounds, cc_infeasible = self.compute_exec_risk_bounds(
+                    #     er_bound, risk, children, prob_safe)
 
-                            # Updates the best action at node
-                            best_Q = Q
-                            best_action_idx = act_idx
-                            best_D = D
-                            exec_risk_for_best = exec_risk
-                # Test if some action has been selected
-                if best_action_idx >= 0:
-                    if (not np.isclose(best_Q, current_Q)) and self.is_better(best_Q, current_Q):
-                        print('current_Q', current_Q, 'best_Q', best_Q)
 
-                        print(
-                            'WARNING: node Q value improved, which might indicate inadmissibility.')
+                    # Sungkweon: I think this step in unnecessary. Should be checked though.
+                    # for child in children:
+                    #     self.debug('  select_action: child ' + child.state.state_print() + " depth: " + str(child.depth) +
+                    #                " risk bound: " + str(child.exec_risk_bound) + ' infeasible: ' + str(cc_infeasible))
+                    # if not cc_infeasible:  # if chance constraint has not been violated
+                    #     for idx, child in enumerate(children):
+                    #         child.exec_risk_bound = child_er_bounds[idx]
 
-                    # updates optimal value est, execution tisk est, and mark
-                    # best action
-                    node.set_value(best_Q)
-                    node.set_exec_risk(exec_risk_for_best)
-                    node.set_best_action(all_action_operators[best_action_idx])
-                    self.debug('best action for ' + str(node.state.state_print()) + ' set as ' +
-                               str(all_action_operators[best_action_idx].name))
-                else:  # no action was selected, so this node is terminal
-                    self.debug('*\n*\n*\n*\n no best action for ' +
-                               str(node.state.state_print()) + '\n*\n*\n*\n')
+                    # Updates the best action at node
+                    best_Q = Q
+                    best_action_idx = act_idx
+                    best_D = D
+                    exec_risk_for_best = exec_risk
+                    
+            # Test if some action has been selected
+            if best_action_idx >= 0:
+                if (not np.isclose(best_Q, current_Q)) and self.is_better(best_Q, current_Q):
+                    print('current_Q', current_Q, 'best_Q', best_Q)
 
-                    # mdeyo: Finally got plans with deadends to work!
-                    # Deadends = state with no actions available, either
-                    # because it's an actual deadend or because all actons were
-                    # too risky.
-                    # If the deadend was on the optimal path, the planner would
-                    # just mark it terminal and planning would end before
-                    # the goal was achieved
+                    print(
+                        'WARNING: node Q value improved, which might indicate inadmissibility.')
 
-                    # mdeyo: Current fix is just to mark the deadend state as
-                    # having execution risk = 1.0 so that the planner will
-                    # remove the previous action from policy and properly pick
-                    # the next best action at the parent state
-                    # node.risk = 1.0
-                    # node.set_exec_risk(node.risk)
+                er_bound_updating_nodes = deque([node])
 
-                    # mdeyo: alternative, possibly better fix is to update the
-                    # value instead of the risk, setting the value to +inf when
-                    # minimizing
+                while len(er_bound_updating_nodes) > 0:
+                    updating_node = er_bound_updating_nodes.popleft()
 
-                    # only mark inf value deadend if not actually the goal
-                    if not is_terminal_belief(node.state.belief, self.term, self.terminal_prob):
-                            self.mark_deadend(node)
+                    if updating_node.best_action:
+                        best_action_updating = updating_node.best_action
+                        er_bound_updating = updating_node.exec_risk_bound
+                        risk_updating = updating_node.risk
+                        probs_updating = best_action.properties['prob']
+                        prob_safe_updating = best_action.properties['prob_safe']
+                        children_updating = self.graph.hyperedge_successors(updating_node, best_action_updating)
+                        
+                        child_er_bounds = self.compute_exec_risk_bounds_etree(er_bound_updating, risk_updating, children_updating, prob_safe_updating, new_etree_node)g308
 
-                    if not node.terminal:
-                        self.set_terminal_node(node)
+                        for idx, child in enumerate(children_updating):
+                            child.exec_risk_bound = child_er_bounds[idx]
 
-                    # mdeyo: some further testing shows that both these
-                    # solutions to deadends seem to have the same resulting
-                    # policies, while updating the cost ends up in a faster
-                    # search, probably because the Q value prunes the option
-                    # before risk calculations which are more expensive
+                        er_bound_updating_nodes.extend(children_updating)
+                
+        
+                # increment differences to be made by this update
+                self.current_etree_node.increment_diff(node, 'value_diff', node.value, best_Q)
+                self.current_etree_node.increment_diff(node, 'exec_risk_diff', node.exec_risk, exec_risk_for_best)
+                self.current_etree_node.increment_diff(node, 'prev_best_action', node.best_action, all_action_operators[best_action_idx])
+                self.current_etree_node.increment_diff(node, 'current_best_action', node.best_action, all_action_operators[best_action_idx])
+
+                # updates optimal value est, execution tisk est, and mark
+                # best action
+                node.set_value(best_Q)
+                node.set_exec_risk(exec_risk_for_best)
+                node.set_best_action(all_action_operators[best_action_idx])
+                self.debug('best action for ' + str(node.state.state_print()) + ' set as ' +
+                           str(all_action_operators[best_action_idx].name))
+            else:  # no action was selected, so this node is terminal
+                self.debug('*\n*\n*\n*\n no best action for ' +
+                           str(node.state.state_print()) + '\n*\n*\n*\n')
+
+                # mdeyo: Finally got plans with deadends to work!
+                # Deadends = state with no actions available, either
+                # because it's an actual deadend or because all actons were
+                # too risky.
+                # If the deadend was on the optimal path, the planner would
+                # just mark it terminal and planning would end before
+                # the goal was achieved
+
+                # mdeyo: Current fix is just to mark the deadend state as
+                # having execution risk = 1.0 so that the planner will
+                # remove the previous action from policy and properly pick
+                # the next best action at the parent state
+                # node.risk = 1.0
+                # node.set_exec_risk(node.risk)
+
+                # mdeyo: alternative, possibly better fix is to update the
+                # value instead of the risk, setting the value to +inf when
+                # minimizing
+
+                # only mark inf value deadend if not actually the goal
+                # if not is_terminal_belief(node.state.belief, self.term, self.terminal_prob):
+                #         self.mark_deadend(node)
+
+                if not node.terminal:
+                    self.set_deadend_terminal_node(node)
+
+                # mdeyo: some further testing shows that both these
+                # solutions to deadends seem to have the same resulting
+                # policies, while updating the cost ends up in a faster
+                # search, probably because the Q value prunes the option
+                # before risk calculations which are more expensive
+                                                    
+
+
+        
+    # def expand_best_partial_solution(self,expansion):
+    #     # expands a node in the graph currently contained in the best
+    #     # partial solution. Add new nodes and edges on the graph
+
+    #     node = expansion['expansion_node']
+        
+    #     self.debug('\n ******* expanding node *******')
+    #     self.debug(node.state.state_print())
+    #     # print(node.state.state_print())
+    #     self.debug('******************************\n')
+    #     belief = node.state.belief  # belief state associated to the node
+    #     parent_risk = node.risk  # execution risk for current node
+    #     parent_bound = node.exec_risk_bound  # er bound for current node
+    #     parent_depth = node.depth  # dist of parent to root
+    #     parent_likelihood = node.likelihood  # likelihood that node is reached in policy
+
+    #     if self.cc_type == 'everywhere':
+    #         parent_bound = self.cc
+
+    #     self.debug('compute_exec_risk_bounds: parent_bound ',
+    #                parent_bound, ' parent_risk ', parent_risk)
+
+    #     # if the current node is guaranteed to violate constraints and a violation
+    #     # is set to halt process: make node terminal
+    #     if self.halt_on_violation and np.isclose(parent_risk, 1.0):
+    #         all_node_actions = []
+    #     else:
+    #         # else get the available actions from model
+    #         all_node_actions = self.get_all_actions(belief, self.A)
+
+    #     action_added = False  # flag if a new action has been added
+
+    #     if len(all_node_actions) > 0:
+    #         added_count = 0
+    #         for act in all_node_actions:
+    #             self.debug("\n", act)
+
+    #             child_obj_list, prob_list, prob_safe_list, new_child_idxs = self.obtain_child_objs_and_probs(belief, self.T, self.O, self.r, act)
+
+    #             # initializes the new child nodes
+    #             for c_idx in new_child_idxs:
+    #                 self.set_new_node(
+    #                     child_obj_list[c_idx], parent_depth + 1, 0.0, prob_list[c_idx], parent_likelihood)
+
+    #             # if parent bound Delta is ~ 1.0, the child nodes are guaranteed to have
+    #             # their risk bound equal to 1
+    #             if (not np.isclose(parent_bound, 1.0)):
+    #                 # computes execution risk bounds for the child nodes
+    #                 er_bounds, er_bound_infeasible = self.compute_exec_risk_bounds(parent_bound,
+    #                                                                                parent_risk, child_obj_list, prob_safe_list)
+    #             else:
+    #                 er_bounds = [1.0] * len(child_obj_list)
+    #                 er_bound_infeasible = False
+
+    #             # Only creates new operator if all er bounds a non-negative
+    #             if not er_bound_infeasible:
+    #                 # updates the values of the execution risk for all children
+    #                 # that will be added to the graph
+    #                 for idx, child in enumerate(child_obj_list):
+    #                     child.exec_risk_bound = er_bounds[idx]
+
+    #                 # average instantaneous value (cost or reward)
+    #                 avg_op_value = avg_func(belief, self.V, act)
+
+    #                 act_obj = RAOStarGraphOperator(name=str(act), op_value=avg_op_value,
+    #                                                properties={'prob': prob_list, 'prob_safe': prob_safe_list})
+    #                 # an "Action" object crerated
+    #                 # add edge (Action) to graph
+    #                 self.graph.add_hyperedge(
+    #                     parent_obj=node, child_obj_list=child_obj_list, prob_list=prob_list, op_obj=act_obj)
+
+    #                 action_added = True
+    #                 added_count += 1
+    #             else:
+    #                 self.debug(
+    #                     '  action not added - error bound infeasible')
+
+    #     if not action_added:
+    #         # self.debug('action not added')
+    #         # self.set_terminal_node(node)
+
+    #         if not is_terminal_belief(node.state.belief, self.term, self.terminal_prob):
+    #                 self.mark_deadend(node)
+
+    #         if not node.terminal:
+    #             self.set_terminal_node(node)
+
+    #     # returns the list of node either added actions to or marked terminal
+    #     return nodes_to_expand
+
+    # def update_values_and_best_actions(self, expanded_nodes):
+    #     # updates the Q values on nodes on the graph and the current best policy
+    #     # for each expanded node at a time
+    #     self.debug('\n ****************************')
+    #     self.debug('Update values and best actions  ')
+    #     self.debug('****************************')
+
+    #     for exp_idx, exp_node in enumerate(expanded_nodes):
+    #         Z = self.build_ancestor_list(exp_node)
+    #         # updates the best action at the node
+    #         for node in Z:
+    #             self.debug('\nupdate values and best action: ' +
+    #                        str(node.state.state_print()))
+    #             self.debug('current Q: ', node.value, "\n")
+
+    #             # all actions available at that node
+    #             all_action_operators = [
+    #             ] if node.terminal else self.graph.all_node_operators(node)
+    #             # get all actions (operators) of node from graph
+    #             # risk at the node's belief state (does no depend on the action
+    #             # taken)
+    #             risk = node.risk
+    #             # current *admissible* (optimistic) estimate of the node's Q
+    #             # value
+    #             current_Q = node.value
+    #             # execution risk bound. the execution risk cap depends on type of chance
+    #             # constraint being imposed
+    #             er_bound = min([node.exec_risk_bound, self.er_cap])
+    #             if self.cc_type == 'everywhere':
+    #                 er_bound = self.er_cap
+                    
+    #             best_action_idx = -1
+    #             best_Q = self.initial_Q  # -inf or inf based on optimization
+    #             best_D = -1  # depth
+    #             exec_risk_for_best = -1.0
+
+    #             # Estimates value and risk of the current node for each
+    #             # possible action
+    #             for act_idx, act in enumerate(all_action_operators):
+    #                 probs = act.properties['prob']
+    #                 prob_safe = act.properties['prob_safe']
+    #                 children = self.graph.hyperedge_successors(node, act)
+    #                 # estimate Q of taking this action from current node. Composed of
+    #                 # current reward and the average reward of its children
+    #                 Q = act.op_value + \
+    #                     np.sum([p * child.value for (p, child)
+    #                             in zip(probs, children)])
+    #                 # Average child depth
+    #                 D = 1 + np.sum([p * child.depth for (p, child)
+    #                                 in zip(probs, children)])
+
+    #                 # compute an estimate of the er of taking this action from current node.
+    #                 # composed of the current risk and the avg execution risk
+    #                 # of its children
+    #                 if self.cc_type == 'overall':
+    #                     exec_risk = risk + (1.0 - risk) * np.sum([p * child.exec_risk for (p, child)
+    #                                                               in zip(prob_safe, children)])
+    #                 # enforcing same risk bound at all steps in the policy
+    #                 elif self.cc_type == 'everywhere':
+    #                     exec_risk = risk
+
+    #                 self.debug('action: ' + act.name + ' children: ' + str(children[0].state.state_print()) +
+    #                            ' risk ' + str(exec_risk))
+    #                 self.debug('  act_op_value: ', act.op_value)
+
+    #                 for child in children:
+    #                     self.debug(' child_value: ', child.value)
+
+    #                 self.debug('  children Q: ' + str(Q))
+
+    #                 # if execution risk bound has been violated or if Q value for this action is worse
+    #                 # than current best, we should definitely not select it.
+    #                 if (exec_risk > er_bound) or self.is_worse(Q, best_Q):
+    #                     select_action = False
+    #                     if(exec_risk > er_bound):
+    #                         self.debug(' Action pruned by risk bound')
+    #                 # if risk bound respected and Q value is equal or better
+    #                 else:
+    #                     select_action = True
+    #                 # Test if the risk bound for the current node has been
+    #                 # violated
+    #                 if select_action:
+    #                     # Updates the execution risk bounds for the children
+    #                     child_er_bounds, cc_infeasible = self.compute_exec_risk_bounds(
+    #                         er_bound, risk, children, prob_safe)
+    #                     for child in children:
+    #                         self.debug('  select_action: child ' + child.state.state_print() + " depth: " + str(child.depth) +
+    #                                    " risk bound: " + str(child.exec_risk_bound) + ' infeasible: ' + str(cc_infeasible))
+    #                     if not cc_infeasible:  # if chance constraint has not been violated
+    #                         for idx, child in enumerate(children):
+    #                             child.exec_risk_bound = child_er_bounds[idx]
+
+    #                         # Updates the best action at node
+    #                         best_Q = Q
+    #                         best_action_idx = act_idx
+    #                         best_D = D
+    #                         exec_risk_for_best = exec_risk
+    #             # Test if some action has been selected
+    #             if best_action_idx >= 0:
+    #                 if (not np.isclose(best_Q, current_Q)) and self.is_better(best_Q, current_Q):
+    #                     print('current_Q', current_Q, 'best_Q', best_Q)
+
+    #                     print(
+    #                         'WARNING: node Q value improved, which might indicate inadmissibility.')
+
+    #                 # updates optimal value est, execution tisk est, and mark
+    #                 # best action
+    #                 node.set_value(best_Q)
+    #                 node.set_exec_risk(exec_risk_for_best)
+    #                 node.set_best_action(all_action_operators[best_action_idx])
+    #                 self.debug('best action for ' + str(node.state.state_print()) + ' set as ' +
+    #                            str(all_action_operators[best_action_idx].name))
+    #             else:  # no action was selected, so this node is terminal
+    #                 self.debug('*\n*\n*\n*\n no best action for ' +
+    #                            str(node.state.state_print()) + '\n*\n*\n*\n')
+
+    #                 # mdeyo: Finally got plans with deadends to work!
+    #                 # Deadends = state with no actions available, either
+    #                 # because it's an actual deadend or because all actons were
+    #                 # too risky.
+    #                 # If the deadend was on the optimal path, the planner would
+    #                 # just mark it terminal and planning would end before
+    #                 # the goal was achieved
+
+    #                 # mdeyo: Current fix is just to mark the deadend state as
+    #                 # having execution risk = 1.0 so that the planner will
+    #                 # remove the previous action from policy and properly pick
+    #                 # the next best action at the parent state
+    #                 # node.risk = 1.0
+    #                 # node.set_exec_risk(node.risk)
+
+    #                 # mdeyo: alternative, possibly better fix is to update the
+    #                 # value instead of the risk, setting the value to +inf when
+    #                 # minimizing
+
+    #                 # only mark inf value deadend if not actually the goal
+    #                 if not is_terminal_belief(node.state.belief, self.term, self.terminal_prob):
+    #                         self.mark_deadend(node)
+
+    #                 if not node.terminal:
+    #                     self.set_terminal_node(node)
+
+    #                 # mdeyo: some further testing shows that both these
+    #                 # solutions to deadends seem to have the same resulting
+    #                 # policies, while updating the cost ends up in a faster
+    #                 # search, probably because the Q value prunes the option
+    #                 # before risk calculations which are more expensive
 
     def mark_deadend(self, node):
         # choose the comparison function depending on the type of search
@@ -709,6 +928,61 @@ class RAOStar(object):
                         break
         return exec_risk_bounds, infeasible
 
+    def compute_exec_risk_bounds_etree(self, parent_bound, parent_risk, child_list, prob_safe_list, etree_node, is_terminal_node=False):
+        # computes the execution risk bounds for each sibling in a list of
+        # children of a node
+        # msg = 'compute_exec_risk_bounds: parent ' + str(parent_bound) + ' risk ' + str(parent_risk) + ' child_list ' + str(
+        #     child_list) + ' prob_safe_list ' + str(prob_safe_list) + ' terminal ' + str(is_terminal_node)
+        # self.debug(msg)
+        exec_risk_bounds = [0.0] * len(child_list)
+        # If the parent bound is almost one, the risk of the children are
+        # guaranteed to be feasible
+        if np.isclose(parent_bound, 1.0):
+            exec_risk_bounds = [1.0] * len(child_list)
+            infeasible = False
+            self.debug('parent bound close to 1!')
+        else:
+            # if parent bound isn't one, but risk is almost one, or if parent already violates the risk bound
+            # don't try to propagate, since children guaranteed to violate
+            if np.isclose(parent_risk, 1.0) or (parent_risk > parent_bound):
+                infeasible = True
+            # Only if the parent bound and the parent risk are below 1, and the parent risk is below the parent bound,
+            # then try to propagate risk
+            else:
+                infeasible = False
+                # risk "consumed" by parent node
+                parent_term = (parent_bound - parent_risk) / \
+                    (1.0 - parent_risk)
+
+                for idx_child, child in enumerate(child_list):
+                    # Risk consumed by the siblings of the current node
+                    sibling_term = np.sum(
+                        [p * c.exec_risk for (p, c) in zip(prob_safe_list, child_list) if (c != child)])
+
+                    exec_risk_bound = min(
+                        [(parent_term - sibling_term) / prob_safe_list[idx_child], 1.0])
+
+                    # A negative bound means that the chance constraint is guaranteed
+                    # to be violated. The same is true if the admissible estimate
+                    # of the execution risk for a child node violates its upper
+                    # bound.
+                    if exec_risk_bound >= 0.0:
+                        self.debug('  child_exec_risk:', child.exec_risk,
+                                   'child_exec_risk_bound', exec_risk_bound)
+                        if child.exec_risk <= exec_risk_bound or np.isclose(child.exec_risk, exec_risk_bound):
+                            exec_risk_bounds[idx_child] = exec_risk_bound
+                            etree_node.increment_diff(child, 'er_bound_diff', child.exec_risk_bound, exec_risk_bound)
+
+                        else:
+                            self.debug('  INFEASIBLE: risk exceeds bound')
+                            infeasible = True
+                            break
+                    else:
+                        self.debug('  INFEASIBLE: impossible risk bound')
+                        infeasible = True
+                        break
+        return exec_risk_bounds, infeasible
+    
     def build_ancestor_list(self, expanded_node):
         # create set Z that contains the expanded node and all of its ancestors in the explicit graph
         # along marked action arcs (ancestors nodes from best policy)
