@@ -72,7 +72,7 @@ class RAOStar(object):
             self.select_best_node = lambda n_list: max(
                 n_list, key=lambda expansion: expansion['expansion_node'].value)
             self.select_best_hyperedge = lambda n_list: max(
-                n_list, key=lambda expansion: expansion['expansion_hyperedge'].op_value)
+                n_list, key=lambda expansion: expansion['Q_value'])
             self.incumbent_value = -np.inf
             
         elif model.optimization == 'minimize':
@@ -82,7 +82,7 @@ class RAOStar(object):
             self.select_best_node = lambda n_list: min(
                 n_list, key=lambda expansion: expansion['expansion_node'].value)
             self.select_best_hyperedge = lambda n_list: min(
-                n_list, key=lambda expansion: expansion['expansion_hyperedge'].op_value)
+                n_list, key=lambda expansion: expansion['Q_value'])
             self.incumbent_value = np.inf
             
         else:
@@ -140,6 +140,11 @@ class RAOStar(object):
                 
             expanded_etree_node = self.expand_etree_node(expansion)
 
+            print('-----------------------------------')
+            print('expansion')
+            print(count)
+            print('-----------------------------------')
+
             # update queue
             is_queue_updated = self.update_queue()
 
@@ -149,12 +154,15 @@ class RAOStar(object):
             else:
                 if self.graph.root.terminal != True:  # if solution is feasible
                     # if current feasible solution is better than incumbent, set it as incumbent
-                    self.is_better(self.graph.root.value, self.incumbent_value)
-                    self.set_incumbent()
+                    if self.is_better(self.graph.root.value, self.incumbent_value):
+                        self.set_incumbent()
+                        print(self.incumbent_value)
+                        print(self.graph.root.exec_risk)
+                        self.extract_policy()
+                        time.sleep(3)
 
                 expansion = self.choose_expansion()                
-                    
-            
+                        
         print('\n RAO* finished planning in ' +
               "{0:.2f}".format(time.time() - self.start_time) + " seconds after " + str(count) + " iterations\n")
         policy = self.extract_policy()
@@ -234,18 +242,19 @@ class RAOStar(object):
         # set fields of a terminal node
         b = node.state.belief 
         
-        self.current_etree_node.diff[node]['deadend_checked'] = True
         self.current_etree_node.increment_diff(node, 'value_diff', node.value, avg_func(b, self.h))
         self.current_etree_node.increment_diff(node, 'exec_risk_diff', node.exec_risk, node.risk)
         self.current_etree_node.increment_diff(node, 'prev_best_action', node.best_action, None)
         self.current_etree_node.increment_diff(node, 'current_best_action', node.best_action, None)
-        
+        self.current_etree_node.diff[node]['deadend_checked'] = True
         
         node.set_terminal(True)
         node.set_value(avg_func(b, self.h))
         node.set_exec_risk(node.risk)
         node.set_best_action(None)
-        self.graph.remove_all_hyperedges(node)  # terminal node has no edges
+
+        # this can be not terminal for another enumeration. So we must not remove hyperedges.
+        # self.graph.remove_all_hyperedges(node)  # terminal node has no edges
         
     def update_queue(self):
         self.debug('\n\n******* updating queue list *******')
@@ -270,12 +279,14 @@ class RAOStar(object):
             ops = self.graph.all_node_operators(node)
             if len(ops)>0:
                 for op in ops:
+                    prob = op.properties['prob']
                     prob_safe = op.properties['prob_safe']
                     children = self.graph.hyperedge_successors(node, op)
                     exec_risk = parent_risk + (1.0 - parent_risk) * np.sum([p * child.exec_risk for (p, child) in zip(prob_safe, children)])
+                    Q = op.op_value + np.sum([p * child.value for (p, child) in zip(prob, children)])
 
                     if exec_risk <= parent_bound:
-                       queue_list.append({'current_etree_node':self.current_etree_node,'expansion_node':node, 'expansion_hyperedge':op}) 
+                       queue_list.append({'current_etree_node':self.current_etree_node,'expansion_node':node, 'expansion_hyperedge':op, 'Q_value':Q}) 
                     
             else:
                 if self.cc_type == 'everywhere':
@@ -303,12 +314,12 @@ class RAOStar(object):
                             self.set_new_node(
                                 child_obj_list[c_idx], parent_depth + 1, 0.0, prob_list[c_idx], parent_likelihood)
 
-                        child_er_bounds = self.compute_exec_risk_bounds_etree(er_bound, risk_updating, children_updating, prob_safe_updating)
-                        
+                        child_er_bounds, er_bound_infeasible = self.compute_exec_risk_bounds(parent_bound, parent_risk, child_obj_list, prob_safe_list)
+
                         # updates the values of the execution risk for all children
                         # that will be added to the graph
                         for idx, child in enumerate(child_obj_list):
-                            child.exec_risk_bound = er_bounds[idx]
+                            child.exec_risk_bound = child_er_bounds[idx]
 
                         # average instantaneous value (cost or reward)
                         avg_op_value = avg_func(belief, self.V, act)
@@ -320,14 +331,16 @@ class RAOStar(object):
                         self.graph.add_hyperedge(
                             parent_obj=node, child_obj_list=child_obj_list, prob_list=prob_list, op_obj=act_obj)
 
-                        action_added = True
+                        action_added = True                        
 
                         prob_safe = act_obj.properties['prob_safe']
                         children = self.graph.hyperedge_successors(node, act_obj)
                         exec_risk = parent_risk + (1.0 - parent_risk) * np.sum([p * child.exec_risk for (p, child) in zip(prob_safe, children)])
 
+                        Q = act_obj.op_value + np.sum([p * child.value for (p, child) in zip(prob_list, child_obj_list)])
+                    
                         if exec_risk <= parent_bound:
-                            queue_list.append({'current_etree_node':self.current_etree_node,'expansion_node':node, 'expansion_hyperedge':act_obj}) 
+                            queue_list.append({'current_etree_node':self.current_etree_node,'expansion_node':node, 'expansion_hyperedge':act_obj, 'Q_value':Q}) 
 
                 if not action_added:
                     # self.debug('action not added')
@@ -453,7 +466,7 @@ class RAOStar(object):
             if node == exp_node:
                 # set best action of current expanding node as current expanding action
                 # this is different from original RAO*, becuase we don't choose "best" action anymore.
-                all_action_operators = exp_action
+                all_action_operators = [exp_action]
             else:
                 # get all actions available at that node, if the node is an ancestor of the expanding node
                 # get all actions (operators) of node from graph
@@ -500,7 +513,7 @@ class RAOStar(object):
                 # enforcing same risk bound at all steps in the policy
                 elif self.cc_type == 'everywhere':
                     exec_risk = risk
-
+                    
                 self.debug('action: ' + act.name + ' children: ' + str(children[0].state.state_print()) +
                            ' risk ' + str(exec_risk))
                 self.debug('  act_op_value: ', act.op_value)
@@ -558,11 +571,11 @@ class RAOStar(object):
                         best_action_updating = updating_node.best_action
                         er_bound_updating = updating_node.exec_risk_bound
                         risk_updating = updating_node.risk
-                        probs_updating = best_action.properties['prob']
-                        prob_safe_updating = best_action.properties['prob_safe']
+                        probs_updating = best_action_updating.properties['prob']
+                        prob_safe_updating = best_action_updating.properties['prob_safe']
                         children_updating = self.graph.hyperedge_successors(updating_node, best_action_updating)
                         
-                        child_er_bounds = self.compute_exec_risk_bounds_etree(er_bound_updating, risk_updating, children_updating, prob_safe_updating, new_etree_node)g308
+                        child_er_bounds, er_bound_infeasible = self.compute_exec_risk_bounds_etree(er_bound_updating, risk_updating, children_updating, prob_safe_updating, new_etree_node)
 
                         for idx, child in enumerate(children_updating):
                             child.exec_risk_bound = child_er_bounds[idx]
@@ -1007,6 +1020,7 @@ class RAOStar(object):
         # self.debug("===========================")
         queue = deque([self.graph.root])  # from root
         policy = {}
+        k=0
         while len(queue) > 0:
             node = queue.popleft()
             if node.best_action != None:
@@ -1014,12 +1028,15 @@ class RAOStar(object):
                 children = self.graph.hyperedges[node][node.best_action]
                 for c in children:
                     queue.append(c)
+                    k=k+1
+        print(k)
         return policy
 
     def choose_expansion(self):
         # chooses an element from queue list to be expanded
-        queue = self.queue[0]
-        
+
+        # deep copy of the first list of queue list.
+        queue = self.queue[0][:]
         if len(queue) > 1:
             # sorting expansions with best nodes first.
             queue_with_best_node = []
@@ -1028,22 +1045,23 @@ class RAOStar(object):
                 best_node_value = -np.inf
             elif self.model.optimization == 'minimize':
                 best_node_value = np.inf                    
-                    
+                
             while len(queue)>0:
-                item, best_node_value_temp = self.select_best_node(queue)
-                if self.is_worse(best_node_value_temp, best_node_value):
+                etree_node = self.select_best_node(queue)
+                if self.is_worse(etree_node['expansion_node'].value, best_node_value):
                     break
                 else:
-                    queue_with_best_node.append(item)
-                    best_node_value = best_node_value_temp
+                    queue_with_best_node.append(etree_node)
+                    best_node_value = etree_node['expansion_node'].value
+                    queue.remove(etree_node)
 
             # Then, find the expansion with best action
             expansion = self.select_best_hyperedge(queue_with_best_node)
-            queue.remove(node)
+            self.queue[0].remove(expansion)
         else:  # if there is only one, use that one
             expansion = queue.pop()
             del self.queue[0]
-            
+
         return expansion
 
     def choose_most_likely_leaf(self):

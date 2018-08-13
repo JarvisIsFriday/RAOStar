@@ -100,7 +100,7 @@ class EnumTreeNode(EnumTreeElement):
         elif key=='current_best_action':
             self.diff[node][key] = new_value
         else:
-            self.diff[node][key] = self.diff[node][key] + (new_value - pre_value)
+            self.diff[node][key] = self.diff[node][key] + (new_value - prev_value)
 
     # def compute_diff(self, prev_node, new_node):
     #     value_diff = new_node.value - prev_node.value
