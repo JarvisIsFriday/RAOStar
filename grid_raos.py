@@ -38,5 +38,7 @@ if __name__ == '__main__':
     state = (0,0)
     P, G = algo.search(b_init)
 
-    print("Root risk : ",algo.graph.root.exec_risk)
-    print("Root value: ",algo.graph.root.value)
+    # print("Root risk : ",algo.graph.root.exec_risk)
+    # print("Root value: ",algo.graph.root.value)
+
+    print(algo.incumbent_value_list)

@@ -38,6 +38,8 @@ class RAOStar(object):
         # expansion_queue is another dictionary, with three key-values.
         # 1) current_etree_node (redundant, but useful), 2) expansion_node, 3) expansion_hyperedge
         self.queue = []
+        self.expanded_queue_list = [] # list of expanded queue. element is dictionary,
+                                 # with 3-tuple key: (expansion_node name, expansion_hyperedge name, er_bound)
         self.current_etree_node = None # current expanding enumeration tree node
         self.opennodes = set()
         self.policy_ancestors = {}  # ancestors set for updating policy
@@ -50,6 +52,7 @@ class RAOStar(object):
         self.end_search_on_likelihood = False
 
         self.incumbent_policy = None
+        self.incumbent_value_list = []
 
         self.debug("halting", self.halt_on_violation)
 
@@ -158,22 +161,29 @@ class RAOStar(object):
                 expansion = self.choose_expansion()                
 
             else:
-                if self.graph.root.terminal != True:  # if solution is feasible
+                complete_flag = 1
+                for node in self.opennodes:
+                    if node.terminal != True:
+                        complete_flag = 0
+                        break
+                    
+                if complete_flag == 1 and self.graph.root.terminal != True:  # if solution is feasible
                     # if current feasible solution is better than incumbent, set it as incumbent
                     if self.is_better(self.graph.root.value, self.incumbent_value):                   
                         self.set_incumbent()
+                        self.incumbent_value_list.append([self.incumbent_value, self.graph.root.exec_risk])
                         print(self.incumbent_value)
                         print(self.graph.root.exec_risk)
                         self.extract_policy()
                         print(len(self.queue))
-                        time.sleep(1)
-
-                    else:
-                        print(self.graph.root.value)
-                        print(self.graph.root.exec_risk)
-                        self.extract_policy()
-                        print(len(self.queue))
                         # time.sleep(1)
+
+                    # else:
+                    #     print(self.graph.root.value)
+                    #     print(self.graph.root.exec_risk)
+                    #     self.extract_policy()
+                    #     print(len(self.queue))
+                    #     time.sleep(1)
 
                 expansion = self.choose_expansion()
 
@@ -301,7 +311,18 @@ class RAOStar(object):
                     Q = op.op_value + np.sum([p * child.value for (p, child) in zip(prob, children)])
 
                     if exec_risk <= parent_bound:
-                       queue_list.append({'current_etree_node':self.current_etree_node,'expansion_node':node, 'expansion_hyperedge':op, 'Q_value':Q}) 
+
+                        expanded_flag = 0
+                        for expanded_queue in self.expanded_queue_list:
+                            if expanded_queue['expansion_node_name'] == node.name and \
+                               expanded_queue['expansion_hyperedge_name'] == op.name and \
+                               expanded_queue['er_bound'] == node.exec_risk_bound:
+
+                                expanded_flag = 1
+                                break
+
+                        if expanded_flag == 0:
+                            queue_list.append({'current_etree_node':self.current_etree_node,'expansion_node':node, 'expansion_hyperedge':op, 'Q_value':Q})
                     
             else:
                 if self.cc_type == 'everywhere':
@@ -355,7 +376,18 @@ class RAOStar(object):
                         Q = act_obj.op_value + np.sum([p * child.value for (p, child) in zip(prob_list, child_obj_list)])
                     
                         if exec_risk <= parent_bound:
-                            queue_list.append({'current_etree_node':self.current_etree_node,'expansion_node':node, 'expansion_hyperedge':act_obj, 'Q_value':Q}) 
+
+                            expanded_flag = 0
+                            for expanded_queue in self.expanded_queue_list:
+                                if expanded_queue['expansion_node_name'] == node.name and \
+                                   expanded_queue['expansion_hyperedge_name'] == act_obj.name and \
+                                   expanded_queue['er_bound'] == node.exec_risk_bound:
+
+                                    expanded_flag = 1
+                                    break
+
+                            if expanded_flag == 0:
+                                queue_list.append({'current_etree_node':self.current_etree_node,'expansion_node':node, 'expansion_hyperedge':act_obj, 'Q_value':Q})
 
                 if not action_added:
                     # self.debug('action not added')
@@ -1086,6 +1118,9 @@ class RAOStar(object):
             del self.queue[0]
             
 
+        self.expanded_queue_list.append({'expansion_node_name':expansion['expansion_node'].name,
+                                    'expansion_hyperedge_name':expansion['expansion_hyperedge'].name,
+                                    'er_bound':expansion['expansion_node'].exec_risk_bound})
 
         for i in self.queue:
             f.write(str(len(i))+",")
