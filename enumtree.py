@@ -42,6 +42,8 @@ Enumeration Tree for systematic search
 
 
 import sys
+import string
+import random
 from collections import deque
 
 
@@ -51,13 +53,17 @@ class EnumTreeElement(object):
     """
 
     def __init__(self, name=None, properties={}):
-        self.name = name
+        self.set_name(name)
+        # self.name = name
         self.properties = properties
 
     __hash__ = object.__hash__
 
     def set_name(self, new_name):
-        self.name = new_name
+        if new_name == None:
+            self.name = self.id_generator()
+        else:
+            self.name = new_name
 
     def set_properties(self, new_properties):
         if isinstance(new_properties, dict):
@@ -71,6 +77,9 @@ class EnumTreeElement(object):
 
     def __ne__(self, other):
         return not self == other
+
+    def id_generator(self, size=6, chars=string.ascii_uppercase + string.digits):
+        return ''.join(random.choice(chars) for _ in range(size))
 
 
 class EnumTreeNode(EnumTreeElement):
@@ -89,7 +98,7 @@ class EnumTreeNode(EnumTreeElement):
         self.diff = dict()
 
     def init_diff(self, node):
-        self.diff[node] = {'value_diff':0, 'exec_risk_diff':0, 'er_bound_diff':0, 'prev_best_action':None, 'current_best_action':None, 'deadend_checked':False}
+        self.diff[node] = {'value_diff':0, 'exec_risk_diff':0, 'er_bound_diff':0, 'prev_best_action':False, 'current_best_action':False, 'deadend_checked':False}
 
     def increment_diff(self, node, key, prev_value, new_value):
         if node not in self.diff :
@@ -127,21 +136,21 @@ class EnumTree(EnumTreeElement):
 
     def checkout(self, from_node, to_node):
         # find two different nodes' common ancestor
-        first_common_ancestor = find_first_common_ancestor(from_node, to_node)
+        first_common_ancestor = self.find_first_common_ancestor(from_node, to_node)
 
         # from "from_node" to ancestor, undoing all differences
-        undo_diff(from_node, first_common_ancestor)
+        self.undo_diff(from_node, first_common_ancestor)
 
         # from ancestor to "to_node", redoing all differences
-        redo_diff(to_node, first_common_ancestor)
+        self.redo_diff(to_node, first_common_ancestor)
 
     def find_first_common_ancestor(self, from_node, to_node):
         # find first common ancestor for from and to nodes.
         
         # get all ancestors for both from and to nodes.
-        from_node_ancestors = all_ancestors(from_node)
-        to_node_ancestors = all_ancestors(to_node)
-
+        from_node_ancestors = self.all_ancestors(from_node)
+        to_node_ancestors = self.all_ancestors(to_node)
+        
         fist_common_ancestor = None
 
         while len(from_node_ancestors)>0 and len(to_node_ancestors)>0 :
@@ -181,16 +190,18 @@ class EnumTree(EnumTreeElement):
         undoing_node = from_node
 
         # undo differences until reaching common ancestor
-        while undoing_node != common_ancestor:
 
+        while undoing_node != common_ancestor:
             # undo differences for all nodes that has changed in this etree node
             for diff_node in undoing_node.diff:
-                diff_node.value -= undoing_node.diff['value_diff']
-                diff_node.exec_risk -= undoing_node.diff['exec_risk_diff']
-                diff_node.exec_risk_bound -= undoing_node.diff['er_bound_diff']
-                diff_node.best_action = undoing_node.diff['prev_best_action']
+                diff_node.value -= undoing_node.diff[diff_node]['value_diff']
+                diff_node.exec_risk -= undoing_node.diff[diff_node]['exec_risk_diff']
+                diff_node.exec_risk_bound -= undoing_node.diff[diff_node]['er_bound_diff']
 
-                if undoing_node.diff['deadend_checked'] == True:
+                if undoing_node.diff[diff_node]['prev_best_action'] != False:
+                    diff_node.best_action = undoing_node.diff[diff_node]['prev_best_action']
+
+                if undoing_node.diff[diff_node]['deadend_checked'] == True:
                     diff_node.terminal = False
                     
             undoing_node = undoing_node.parent_etree_node
@@ -199,14 +210,11 @@ class EnumTree(EnumTreeElement):
         redoing_nodes = []
         redoing_node = to_node
         while True:
-            redoing_nodes.append(redoing_node)
-            parent = redoing_node.parent_etree_node
-
-            if parent == common_ancestor:
+            if redoing_node == common_ancestor:
                 break
             else:
-                redoing_node = parent
-        
+                redoing_nodes.append(redoing_node)
+                redoing_node = redoing_node.parent_etree_node                
 
         # redo differences until reaching to_node
         while len(redoing_nodes)>0:
@@ -214,12 +222,15 @@ class EnumTree(EnumTreeElement):
 
             # redo differences for all nodes that has changed in this etree node
             for diff_node in redoing_node.diff:
-                diff_node.value += redoing_node.diff['value_diff']
-                diff_node.exec_risk += rendoing_node.diff['exec_risk_diff']
-                diff_node.exec_risk_bound += redoing_node.diff['er_bound_diff']
-                diff_node.best_action = redoing_node.diff['current_best_action']
+                diff_node.value += redoing_node.diff[diff_node]['value_diff']
+                diff_node.exec_risk += rendoing_node.diff[diff_node]['exec_risk_diff']
+                diff_node.exec_risk_bound += redoing_node.diff[diff_node]['er_bound_diff']
+                diff_node.best_action = redoing_node.diff[diff_node]['current_best_action']
 
-                if redoing_node.diff['deadend_checked'] == True:
+                if redoing_node.diff[diff_node]['current_best_action'] != False:
+                    diff_node.best_action = redoing_node.diff[diff_node]['current_best_action']
+
+                if redoing_node.diff[diff_node]['deadend_checked'] == True:
                     diff_node.terminal = True
 
 

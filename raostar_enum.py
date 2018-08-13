@@ -135,7 +135,13 @@ class RAOStar(object):
             # if chosen expansion is for another etree node, then recover the graph for that node.
             if self.current_etree_node != expansion['current_etree_node']:
                 target_etree_node = expansion['current_etree_node']
+
+                self.extract_policy()
+                
                 self.etree.checkout(self.current_etree_node, target_etree_node)
+
+                self.extract_policy()
+            
                 self.current_etree_node = target_etree_node
                 
             expanded_etree_node = self.expand_etree_node(expansion)
@@ -154,14 +160,23 @@ class RAOStar(object):
             else:
                 if self.graph.root.terminal != True:  # if solution is feasible
                     # if current feasible solution is better than incumbent, set it as incumbent
-                    if self.is_better(self.graph.root.value, self.incumbent_value):
+                    if self.is_better(self.graph.root.value, self.incumbent_value):                   
                         self.set_incumbent()
                         print(self.incumbent_value)
                         print(self.graph.root.exec_risk)
                         self.extract_policy()
-                        time.sleep(3)
+                        print(len(self.queue))
+                        time.sleep(1)
 
-                expansion = self.choose_expansion()                
+                    else:
+                        print(self.graph.root.value)
+                        print(self.graph.root.exec_risk)
+                        self.extract_policy()
+                        print(len(self.queue))
+                        # time.sleep(1)
+
+                expansion = self.choose_expansion()
+
                         
         print('\n RAO* finished planning in ' +
               "{0:.2f}".format(time.time() - self.start_time) + " seconds after " + str(count) + " iterations\n")
@@ -1033,6 +1048,14 @@ class RAOStar(object):
         return policy
 
     def choose_expansion(self):
+        f = open("temp.txt", "a+")
+        f.write("----------------\n")
+        for i in self.queue:
+            f.write(str(len(i))+",")
+
+        f.write("\n")
+
+        
         # chooses an element from queue list to be expanded
 
         # deep copy of the first list of queue list.
@@ -1061,7 +1084,15 @@ class RAOStar(object):
         else:  # if there is only one, use that one
             expansion = queue.pop()
             del self.queue[0]
+            
 
+
+        for i in self.queue:
+            f.write(str(len(i))+",")
+
+        f.write("\n")
+        f.write("----------------\n")
+        f.close()
         return expansion
 
     def choose_most_likely_leaf(self):
