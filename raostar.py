@@ -370,7 +370,7 @@ class RAOStar(object):
                 if not is_terminal_belief(node.state.belief, self.term, self.terminal_prob):
                         self.mark_deadend(node)
 
-                if not node.terminal:
+                if not node.terminal and not node.deadend:
                     self.set_terminal_node(node)
 
         # returns the list of node either added actions to or marked terminal
@@ -481,6 +481,29 @@ class RAOStar(object):
                         print(
                             'WARNING: node Q value improved, which might indicate inadmissibility.')
 
+
+                    # propagate execution risk bound down to all descendants (added by Sungkwoen)
+                    er_bound_updating_nodes = deque([node])
+
+                    while len(er_bound_updating_nodes) > 0:
+                        updating_node = er_bound_updating_nodes.popleft()
+
+                        if updating_node.best_action:
+                            best_action_updating = updating_node.best_action
+                            er_bound_updating = updating_node.exec_risk_bound
+                            risk_updating = updating_node.risk
+                            probs_updating = best_action_updating.properties['prob']
+                            prob_safe_updating = best_action_updating.properties['prob_safe']
+                            children_updating = self.graph.hyperedge_successors(updating_node, best_action_updating)
+
+                            child_er_bounds, er_bound_infeasible = self.compute_exec_risk_bounds(er_bound_updating, risk_updating, children_updating, prob_safe_updating)
+
+                            for idx, child in enumerate(children_updating):
+                                child.exec_risk_bound = child_er_bounds[idx]
+
+                            er_bound_updating_nodes.extend(children_updating)
+
+                        
                     # updates optimal value est, execution tisk est, and mark
                     # best action
                     node.set_value(best_Q)
@@ -515,7 +538,7 @@ class RAOStar(object):
                     if not is_terminal_belief(node.state.belief, self.term, self.terminal_prob):
                             self.mark_deadend(node)
 
-                    if not node.terminal:
+                    if not node.terminal and not node.deadend:
                         self.set_terminal_node(node)
 
                     # mdeyo: some further testing shows that both these
@@ -530,6 +553,8 @@ class RAOStar(object):
             node.value = -np.inf
         elif self.model.optimization == 'minimize':
             node.value = np.inf
+
+        node.deadend = True
         return node
 
     def compute_exec_risk_bounds(self, parent_bound, parent_risk, child_list, prob_safe_list, is_terminal_node=False):

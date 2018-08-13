@@ -80,11 +80,12 @@ class RAOStarGraphNode(GraphElement):
     Class for nodes in the RAO* hypergraph.
     """
 
-    def __init__(self, value, state, best_action=None, terminal=False, name=None,
+    def __init__(self, value, state, best_action=None, terminal=False, deadend=False, name=None,
                  properties={}, make_unique=False):
         super(RAOStarGraphNode, self).__init__(name, properties)
         self.value = value  # Q value
         self.terminal = terminal  # Terminal flag
+        self.deadend = deadend # Deadend flag. Note that deadend is different from terminal. (added by Sungkweon)
         self.state = state  # Belief state
         self.best_action = best_action  # Best action at the node
 
