@@ -56,6 +56,8 @@ class RAOStar(object):
         self.incumbent_policy = None
         self.incumbent_value_list = []
 
+        self.pruning_count = 0
+
         self.debug("halting", self.halt_on_violation)
 
         # execution risk cap
@@ -156,41 +158,46 @@ class RAOStar(object):
             print(count)
             print('-----------------------------------')
 
-            # update queue
-            is_queue_updated = self.update_queue()
+            # Branch this etree node only if it is not dominated.
+            if self.is_better(self.current_etree_node.root_value, self.incumbent_value):
 
-            if is_queue_updated:
-                expansion = self.choose_expansion()                
+                # update queue
+                is_queue_updated = self.update_queue()
+
+                if is_queue_updated:
+                    expansion = self.choose_expansion()                
+
+                else:
+
+                    # check whether current policy is a solution or not. (if any leaf node is not terminal, it is not solution)
+                    # (and that can happen when no queue was added in the update_queue function becuase all of queue were expanded before)
+                    complete_flag = 1
+                    for node in self.opennodes:
+                        if node.terminal != True:
+                            complete_flag = 0
+                            break
+
+                    if complete_flag == 1 and self.graph.root.terminal != True:  # if solution is feasible
+                        # if current feasible solution is better than incumbent, set it as incumbent
+                        if self.is_better(self.graph.root.value, self.incumbent_value):                   
+                            self.set_incumbent()
+
+                            print(self.incumbent_value)
+                            print(self.graph.root.exec_risk)
+                            p, node_num = self.extract_policy()
+                            self.incumbent_value_list.append([self.incumbent_value, self.graph.root.exec_risk, node_num, time.time()-self.start_time])
+                            print(len(self.queue))
+                            # time.sleep(1)
+
+                            # After setting the incumbent solution, remove the dominated solutions in the queue list.
+                            for queue_idx in range(len(self.queue)):
+                                new_queue = list(filter(lambda item: self.is_better(item['current_etree_node'].root_value, self.incumbent_value), self.queue[queue_idx]))
+                                self.queue[queue_idx] = new_queue
+
+                    expansion = self.choose_expansion()
 
             else:
-
-                # check whether current policy is a solution or not. (if any leaf node is not terminal, it is not solution)
-                # (and that can happen when no queue was added in the update_queue function becuase all of queue were expanded before)
-                complete_flag = 1
-                for node in self.opennodes:
-                    if node.terminal != True:
-                        complete_flag = 0
-                        break
-                    
-                if complete_flag == 1 and self.graph.root.terminal != True:  # if solution is feasible
-                    # if current feasible solution is better than incumbent, set it as incumbent
-                    if self.is_better(self.graph.root.value, self.incumbent_value):                   
-                        self.set_incumbent()
-                        
-                        print(self.incumbent_value)
-                        print(self.graph.root.exec_risk)
-                        p, node_num = self.extract_policy()
-                        self.incumbent_value_list.append([self.incumbent_value, self.graph.root.exec_risk, node_num, time.time()-self.start_time])
-                        print(len(self.queue))
-                        # time.sleep(1)
-
-                    # else:
-                    #     print(self.graph.root.value)
-                    #     print(self.graph.root.exec_risk)
-                    #     self.extract_policy()
-                    #     print(len(self.queue))
-                    #     time.sleep(1)
-
+                self.pruning_count += 1
                 expansion = self.choose_expansion()
 
                         
@@ -204,11 +211,6 @@ class RAOStar(object):
         self.incumbent_value = self.graph.root.value
 
     def init_search(self, b0):
-        # initializes the search fields (initialize enumeration tree with root node)
-        self.etree = EnumTree(name='T')
-        root_etree_node = EnumTreeNode(None)
-        self.etree.add_node(root_etree_node)
-        self.current_etree_node = root_etree_node
         
         # initializes the search fields (initialize graph with start node)       
         self.graph = RAOStarHyperGraph(name='G')
@@ -220,6 +222,12 @@ class RAOStar(object):
                    str(start_node.exec_risk_bound))
         self.graph.add_node(start_node)
         self.graph.set_root(start_node)
+
+        # initializes the search fields (initialize enumeration tree with root node)
+        self.etree = EnumTree(name='T')
+        root_etree_node = EnumTreeNode(parent_etree_node=None, root_value=self.graph.root.value)
+        self.etree.add_node(root_etree_node)
+        self.current_etree_node = root_etree_node
 
         # initialize the queue
         self.update_queue()
@@ -525,7 +533,7 @@ class RAOStar(object):
     def expand_etree_node(self, expansion):
 
         # initialize new etree node and add it to the etree
-        new_etree_node = EnumTreeNode(self.current_etree_node)
+        new_etree_node = EnumTreeNode(parent_etree_node=self.current_etree_node)
         self.etree.add_node(new_etree_node)
         self.current_etree_node = new_etree_node
 
@@ -676,41 +684,11 @@ class RAOStar(object):
             else:  # no action was selected, so this node is terminal
                 self.debug('*\n*\n*\n*\n no best action for ' +
                            str(node.state.state_print()) + '\n*\n*\n*\n')
-
-                # mdeyo: Finally got plans with deadends to work!
-                # Deadends = state with no actions available, either
-                # because it's an actual deadend or because all actons were
-                # too risky.
-                # If the deadend was on the optimal path, the planner would
-                # just mark it terminal and planning would end before
-                # the goal was achieved
-
-                # mdeyo: Current fix is just to mark the deadend state as
-                # having execution risk = 1.0 so that the planner will
-                # remove the previous action from policy and properly pick
-                # the next best action at the parent state
-                # node.risk = 1.0
-                # node.set_exec_risk(node.risk)
-
-                # mdeyo: alternative, possibly better fix is to update the
-                # value instead of the risk, setting the value to +inf when
-                # minimizing
-
-                # only mark inf value deadend if not actually the goal
-                # if not is_terminal_belief(node.state.belief, self.term, self.terminal_prob):
-                #         self.mark_deadend(node)
-
                 if not node.terminal:
                     self.set_deadend_terminal_node(node)
 
-                # mdeyo: some further testing shows that both these
-                # solutions to deadends seem to have the same resulting
-                # policies, while updating the cost ends up in a faster
-                # search, probably because the Q value prunes the option
-                # before risk calculations which are more expensive
-                                                    
-
-
+        # update root value
+        new_etree_node.root_value = self.graph.root.value
         
     # def expand_best_partial_solution(self,expansion):
     #     # expands a node in the graph currently contained in the best
@@ -1121,7 +1099,16 @@ class RAOStar(object):
         # chooses an element from queue list to be expanded
 
         # deep copy of the first list of queue list.
-        queue = self.queue[0][:]
+        while True:
+            if len(self.queue)>0:
+                if len(self.queue[0])==0:
+                    del self.queue[0]
+                else:
+                    queue = self.queue[0][:]
+                    break
+            else:
+                raise ValueError('Error: Queue is empty')
+                
         if len(queue) > 1:
             # sorting expansions with best nodes first.
             queue_with_best_node = []

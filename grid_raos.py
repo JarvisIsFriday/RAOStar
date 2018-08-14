@@ -32,7 +32,7 @@ if __name__ == '__main__':
     
     model = GRIDModel(size, constraint_states, prob_right_transition=0.98, prob_right_observation=0.98)
 
-    algo = RAOStar(model, cc=cc, debugging=False, cc_type='o', fixed_horizon = 2, random_node_selection=False, time_limit=60)
+    algo = RAOStar(model, cc=cc, debugging=False, cc_type='o', fixed_horizon = 3, random_node_selection=False, time_limit=60*45)
 
     b_init = {(0,0): 1.0}
     state = (0,0)
@@ -53,3 +53,4 @@ if __name__ == '__main__':
                 
 
     print(algo.incumbent_value_list)
+    print(algo.pruning_count)

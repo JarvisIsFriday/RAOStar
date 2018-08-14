@@ -87,7 +87,7 @@ class EnumTreeNode(EnumTreeElement):
     Class for nodes in the enumeration tree.
     """
 
-    def __init__(self, parent_etree_node, best_action=None, terminal=False, name=None,
+    def __init__(self, parent_etree_node, best_action=None, terminal=False, name=None, root_value=None,
                  properties={}, make_unique=False):
         super(EnumTreeNode, self).__init__(name, properties)
 
@@ -96,6 +96,9 @@ class EnumTreeNode(EnumTreeElement):
         # Dictionary of differences of values from parent enumeration tree node to current enumeration tree node.
         # Key is RAOStarGraphNode's string name, value is another dictionary, which has diff values for value, execution risk and previous best action.
         self.diff = dict()
+
+        # current root value. This is mainly used for pruning.
+        self.root_value = root_value
 
     def init_diff(self, node):
         self.diff[node] = {'value_diff':0, 'exec_risk_diff':0, 'er_bound_diff':0, 'prev_best_action':False, 'current_best_action':False, 'deadend_checked':False}
