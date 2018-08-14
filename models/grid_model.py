@@ -39,8 +39,8 @@ class GRIDModel(object):
             for j in range(size[1]):
                 self.state_list.append((i,j))
 
-        # self.action_list = ["U","L","R","D"]
-        self.action_list = ["D","R"]
+        self.action_list = ["U","L","R","D"]
+        # self.action_list = ["D","R"]
 
 
         self.constraint_states = constraint_states

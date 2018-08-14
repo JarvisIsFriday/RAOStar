@@ -23,7 +23,7 @@ class RAOStar(object):
     # observable domains
 
     def __init__(self, model, cc=0.0, cc_type='o', fixed_horizon=np.inf,
-                 terminal_prob=1.0, debugging=False, randomization=0.0, halt_on_violation=False, random_node_selection=False):
+                 terminal_prob=1.0, debugging=False, randomization=0.0, halt_on_violation=False, random_node_selection=False, time_limit=np.inf, iter_limit=np.inf):
 
         self.model = model
         self.cc = cc
@@ -50,6 +50,8 @@ class RAOStar(object):
         self.fixed_horizon = fixed_horizon
         self.random_node_selection = random_node_selection
         self.end_search_on_likelihood = False
+        self.time_limit = time_limit
+        self.iter_limit = iter_limit
 
         self.incumbent_policy = None
         self.incumbent_value_list = []
@@ -110,9 +112,9 @@ class RAOStar(object):
                 msg += " " + str(item)
             print(msg)
 
-    def search_termination(self, count, iter_limit, time_limit):
+    def search_termination(self, count):
 
-        if len(self.queue) > 0 and (count <= iter_limit) and (time.time() - self.start_time <= time_limit):
+        if len(self.queue) > 0 and (count <= self.iter_limit) and (time.time() - self.start_time <= self.time_limit):
             return False
 
         return True
@@ -130,7 +132,7 @@ class RAOStar(object):
 
         interrupted = False
 
-        while not self.search_termination(count, iter_limit, time_limit):
+        while not self.search_termination(count):
             count += 1
 
             self.debug('\n\n\n RAO* iteration: ' + str(count) + '\n\n\n')
@@ -161,6 +163,9 @@ class RAOStar(object):
                 expansion = self.choose_expansion()                
 
             else:
+
+                # check whether current policy is a solution or not. (if any leaf node is not terminal, it is not solution)
+                # (and that can happen when no queue was added in the update_queue function becuase all of queue were expanded before)
                 complete_flag = 1
                 for node in self.opennodes:
                     if node.terminal != True:
@@ -171,10 +176,11 @@ class RAOStar(object):
                     # if current feasible solution is better than incumbent, set it as incumbent
                     if self.is_better(self.graph.root.value, self.incumbent_value):                   
                         self.set_incumbent()
-                        self.incumbent_value_list.append([self.incumbent_value, self.graph.root.exec_risk])
+                        
                         print(self.incumbent_value)
                         print(self.graph.root.exec_risk)
-                        self.extract_policy()
+                        p, node_num = self.extract_policy()
+                        self.incumbent_value_list.append([self.incumbent_value, self.graph.root.exec_risk, node_num, time.time()-self.start_time])
                         print(len(self.queue))
                         # time.sleep(1)
 
@@ -268,14 +274,14 @@ class RAOStar(object):
         b = node.state.belief 
         
         self.current_etree_node.increment_diff(node, 'value_diff', node.value, avg_func(b, self.h))
-        self.current_etree_node.increment_diff(node, 'exec_risk_diff', node.exec_risk, node.risk)
+        self.current_etree_node.increment_diff(node, 'exec_risk_diff', node.exec_risk, 1.0)
         self.current_etree_node.increment_diff(node, 'prev_best_action', node.best_action, None)
         self.current_etree_node.increment_diff(node, 'current_best_action', node.best_action, None)
         self.current_etree_node.diff[node]['deadend_checked'] = True
         
         node.set_terminal(True)
         node.set_value(avg_func(b, self.h))
-        node.set_exec_risk(node.risk)
+        node.set_exec_risk(1.0)
         node.set_best_action(None)
 
         # this can be not terminal for another enumeration. So we must not remove hyperedges.
@@ -300,6 +306,9 @@ class RAOStar(object):
             parent_depth = node.depth  # dist of parent to root
             parent_likelihood = node.likelihood  # likelihood that node is reached in policy
 
+            cost_vector = [] # list of cost vector for computing pareto front node-action pairs.
+            queue_list_temp = [] # temporary queue list only for this node.
+            
             # if node was expanded before, reuse prev operators
             ops = self.graph.all_node_operators(node)
             if len(ops)>0:
@@ -312,6 +321,7 @@ class RAOStar(object):
 
                     if exec_risk <= parent_bound:
 
+                        # check whether this queue was expanded before. 
                         expanded_flag = 0
                         for expanded_queue in self.expanded_queue_list:
                             if expanded_queue['expansion_node_name'] == node.name and \
@@ -321,9 +331,15 @@ class RAOStar(object):
                                 expanded_flag = 1
                                 break
 
+                        # add queue only if this queue was not expanded before.
                         if expanded_flag == 0:
-                            queue_list.append({'current_etree_node':self.current_etree_node,'expansion_node':node, 'expansion_hyperedge':op, 'Q_value':Q})
-                    
+                            queue_list_temp.append({'current_etree_node':self.current_etree_node,'expansion_node':node, 'expansion_hyperedge':op, 'Q_value':Q})
+
+                            if self.model.optimization == 'maximize':
+                                cost_vector.append([-Q, node.exec_risk])
+                            elif self.model.optimization == 'minimize':
+                                cost_vector.append([Q, node.exec_risk])
+
             else:
                 if self.cc_type == 'everywhere':
                     parent_bound = self.cc
@@ -377,6 +393,7 @@ class RAOStar(object):
                     
                         if exec_risk <= parent_bound:
 
+                            # check whether this queue was expanded before. 
                             expanded_flag = 0
                             for expanded_queue in self.expanded_queue_list:
                                 if expanded_queue['expansion_node_name'] == node.name and \
@@ -386,8 +403,14 @@ class RAOStar(object):
                                     expanded_flag = 1
                                     break
 
+                            # add queue only if this queue was not expanded before.
                             if expanded_flag == 0:
-                                queue_list.append({'current_etree_node':self.current_etree_node,'expansion_node':node, 'expansion_hyperedge':act_obj, 'Q_value':Q})
+                                queue_list_temp.append({'current_etree_node':self.current_etree_node,'expansion_node':node, 'expansion_hyperedge':act_obj, 'Q_value':Q})
+
+                                if self.model.optimization == 'maximize':
+                                    cost_vector.append([-Q, node.exec_risk])
+                                elif self.model.optimization == 'minimize':
+                                    cost_vector.append([Q, node.exec_risk])
 
                 if not action_added:
                     # self.debug('action not added')
@@ -398,6 +421,13 @@ class RAOStar(object):
 
                     if not node.terminal:
                         self.set_deadend_terminal_node(node)
+
+            cost_vector = np.array(cost_vector)
+            pareto_front = list(self.is_pareto(cost_vector))
+            queue_list_temp = [d for (d, remove) in zip(queue_list_temp, pareto_front) if remove]
+
+            queue_list.extend(queue_list_temp)
+            
 
         if len(queue_list)==0:
             return False
@@ -1077,15 +1107,15 @@ class RAOStar(object):
                     queue.append(c)
                     k=k+1
         print(k)
-        return policy
+        return policy, k
 
     def choose_expansion(self):
-        f = open("temp.txt", "a+")
-        f.write("----------------\n")
-        for i in self.queue:
-            f.write(str(len(i))+",")
+        # f = open("temp.txt", "a+")
+        # f.write("----------------\n")
+        # for i in self.queue:
+        #     f.write(str(len(i))+",")
 
-        f.write("\n")
+        # f.write("\n")
 
         
         # chooses an element from queue list to be expanded
@@ -1122,12 +1152,12 @@ class RAOStar(object):
                                     'expansion_hyperedge_name':expansion['expansion_hyperedge'].name,
                                     'er_bound':expansion['expansion_node'].exec_risk_bound})
 
-        for i in self.queue:
-            f.write(str(len(i))+",")
+        # for i in self.queue:
+        #     f.write(str(len(i))+",")
 
-        f.write("\n")
-        f.write("----------------\n")
-        f.close()
+        # f.write("\n")
+        # f.write("----------------\n")
+        # f.close()
         return expansion
 
     def choose_most_likely_leaf(self):
@@ -1190,3 +1220,19 @@ class RAOStar(object):
                 prob_safe_list.append(0.0)
             count += 1
         return child_obj_list, prob_list, prob_safe_list, new_child_idxs
+
+    
+    def is_pareto(self, costs, maximise=False):
+        """
+        :param costs: An (n_points, n_costs) array
+        :maximise: boolean. True for maximising, False for minimising
+        :return: A (n_points, ) boolean array, indicating whether each point is Pareto efficient
+        """
+        is_efficient = np.ones(costs.shape[0], dtype = bool)
+        for i, c in enumerate(costs):
+            if is_efficient[i]:
+                if maximise:
+                    is_efficient[is_efficient] = np.any(costs[is_efficient]>=c, axis=1)  # Remove dominated points
+                else:
+                    is_efficient[is_efficient] = np.any(costs[is_efficient]<=c, axis=1)  # Remove dominated points
+        return is_efficient

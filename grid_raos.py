@@ -32,7 +32,7 @@ if __name__ == '__main__':
     
     model = GRIDModel(size, constraint_states, prob_right_transition=0.98, prob_right_observation=0.98)
 
-    algo = RAOStar(model, cc=cc, debugging=False, cc_type='o', fixed_horizon = 2, random_node_selection=True)
+    algo = RAOStar(model, cc=cc, debugging=False, cc_type='o', fixed_horizon = 2, random_node_selection=False, time_limit=60)
 
     b_init = {(0,0): 1.0}
     state = (0,0)
@@ -40,5 +40,16 @@ if __name__ == '__main__':
 
     # print("Root risk : ",algo.graph.root.exec_risk)
     # print("Root value: ",algo.graph.root.value)
+
+    algo.extract_policy()
+
+    complete_flag = 1
+    for node in algo.opennodes:
+        if node.terminal != True:
+            complete_flag = 0
+            break
+
+    print(complete_flag)
+                
 
     print(algo.incumbent_value_list)
