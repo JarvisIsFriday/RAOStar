@@ -217,7 +217,7 @@ class EnumTree(EnumTreeElement):
                 break
             else:
                 redoing_nodes.append(redoing_node)
-                redoing_node = redoing_node.parent_etree_node                
+                redoing_node = redoing_node.parent_etree_node
 
         # redo differences until reaching to_node
         while len(redoing_nodes)>0:
@@ -226,9 +226,9 @@ class EnumTree(EnumTreeElement):
             # redo differences for all nodes that has changed in this etree node
             for diff_node in redoing_node.diff:
                 diff_node.value += redoing_node.diff[diff_node]['value_diff']
-                diff_node.exec_risk += rendoing_node.diff[diff_node]['exec_risk_diff']
+                diff_node.exec_risk += redoing_node.diff[diff_node]['exec_risk_diff']
                 diff_node.exec_risk_bound += redoing_node.diff[diff_node]['er_bound_diff']
-                diff_node.best_action = redoing_node.diff[diff_node]['current_best_action']
+                # diff_node.best_action = redoing_node.diff[diff_node]['current_best_action']
 
                 if redoing_node.diff[diff_node]['current_best_action'] != False:
                     diff_node.best_action = redoing_node.diff[diff_node]['current_best_action']

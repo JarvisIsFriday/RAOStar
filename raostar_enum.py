@@ -141,6 +141,7 @@ class RAOStar(object):
 
             # if chosen expansion is for another etree node, then recover the graph for that node.
             if self.current_etree_node != expansion['current_etree_node']:
+                
                 target_etree_node = expansion['current_etree_node']
 
                 self.extract_policy()
@@ -188,12 +189,10 @@ class RAOStar(object):
                             self.incumbent_value_list.append([self.incumbent_value, self.graph.root.exec_risk, node_num, time.time()-self.start_time])
                             print(len(self.queue))
                             # time.sleep(1)
-
+                            
                             # After setting the incumbent solution, remove the dominated solutions in the queue list.
-                            for queue_idx in range(len(self.queue)):
-                                new_queue = list(filter(lambda item: self.is_better(item['current_etree_node'].root_value, self.incumbent_value), self.queue[queue_idx]))
-                                self.queue[queue_idx] = new_queue
-
+                            self.queue = list(filter(lambda item: self.is_better(item[0]['current_etree_node'].root_value, self.incumbent_value), self.queue))
+                            
                     expansion = self.choose_expansion()
 
             else:
@@ -291,6 +290,8 @@ class RAOStar(object):
         node.set_value(avg_func(b, self.h))
         node.set_exec_risk(1.0)
         node.set_best_action(None)
+
+        node.value = np.inf
 
         # this can be not terminal for another enumeration. So we must not remove hyperedges.
         # self.graph.remove_all_hyperedges(node)  # terminal node has no edges
@@ -391,8 +392,7 @@ class RAOStar(object):
                         self.graph.add_hyperedge(
                             parent_obj=node, child_obj_list=child_obj_list, prob_list=prob_list, op_obj=act_obj)
 
-                        action_added = True                        
-
+                        
                         prob_safe = act_obj.properties['prob_safe']
                         children = self.graph.hyperedge_successors(node, act_obj)
                         exec_risk = parent_risk + (1.0 - parent_risk) * np.sum([p * child.exec_risk for (p, child) in zip(prob_safe, children)])
@@ -400,6 +400,8 @@ class RAOStar(object):
                         Q = act_obj.op_value + np.sum([p * child.value for (p, child) in zip(prob_list, child_obj_list)])
                     
                         if exec_risk <= parent_bound:
+
+                            action_added = True
 
                             # check whether this queue was expanded before. 
                             expanded_flag = 0
@@ -429,10 +431,11 @@ class RAOStar(object):
 
                     if not node.terminal:
                         self.set_deadend_terminal_node(node)
+                        queue_list_temp.append({'current_etree_node':self.current_etree_node,'expansion_node':node, 'expansion_hyperedge':None, 'Q_value':None})
 
-            cost_vector = np.array(cost_vector)
-            pareto_front = list(self.is_pareto(cost_vector))
-            queue_list_temp = [d for (d, remove) in zip(queue_list_temp, pareto_front) if remove]
+            # cost_vector = np.array(cost_vector)
+            # pareto_front = list(self.is_pareto(cost_vector))
+            # queue_list_temp = [d for (d, remove) in zip(queue_list_temp, pareto_front) if remove]
 
             queue_list.extend(queue_list_temp)
             
@@ -556,7 +559,11 @@ class RAOStar(object):
                 # get all actions available at that node, if the node is an ancestor of the expanding node
                 # get all actions (operators) of node from graph
                 all_action_operators = [] if node.terminal else self.graph.all_node_operators(node)
-            
+
+
+            if exp_action==None:
+                continue
+                
             # risk at the node's belief state (does no depend on the action
             # taken)
             risk = node.risk
@@ -1145,6 +1152,13 @@ class RAOStar(object):
         # f.write("\n")
         # f.write("----------------\n")
         # f.close()
+
+        # f = open("result2.txt", "a+")
+        # f.write("-------------------\n")
+        # f.write(expansion['expansion_node'].state.state_print())
+        # f.write("\n")
+        # f.write(expansion['expansion_hyperedge'].name)
+        # f.write("\n")
         return expansion
 
     def choose_most_likely_leaf(self):
