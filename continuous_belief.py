@@ -10,6 +10,8 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse
 from scipy.stats import norm
 from matplotlib.collections import LineCollection
+from scipy.spatial import ConvexHull
+
 
 sigma_w = 0.07
 sigma_v = 0.05
@@ -178,6 +180,51 @@ def cont_belief_update(belief_state, control_input):
     return new_belief_state
 
 
+
+def belief_update(m_b, sigma_b, K, K0, I, A, B, C, P, Bw, Dv, sigma_w, sigma_v, sigma_b0):
+
+    noise_covariance = np.diag(
+        [sigma_w, sigma_w, sigma_w, sigma_w, sigma_v, sigma_v, sigma_v, sigma_v])
+
+    W = np.random.normal(0, sigma_w)
+    V = np.random.normal(0, sigma_v)
+
+    term_in_L = (A.dot(P).dot(A.T) + Bw.dot(sigma_w).dot(np.eye(n)).dot(Bw.T)).dot(C.T)
+
+    term_in_L_2 = (C.dot(term_in_L).dot(C.T) +Dv.dot(sigma_v).dot(np.eye(n)).dot(Dv.T)).I
+
+    L = term_in_L.dot(term_in_L_2)
+    
+    # print("L")
+    # print(L)
+    new_P = (np.eye(n) - L.dot(C)).dot(term_in_L)
+
+    # print("new p")
+    # print(new_P)
+
+
+    topAA = np.concatenate((A, B.dot(K)), 1)
+    bottomAA = np.concatenate((L.dot(C).dot(A), A + B.dot(K) - L.dot(C).dot(A)), 1)
+
+    AA = np.concatenate((topAA, bottomAA), 0)
+    # print("AA")
+    # print(AA)
+
+    BBu = np.concatenate((B, B), 0)
+    BBtop = np.concatenate((Bw, np.zeros([n, n])), 1)
+    BBbottom = np.concatenate((L.dot(C).dot(Bw), L.dot(Dv)), 1)
+    BB = np.concatenate((BBtop, BBbottom), 0)
+    # print("BB")
+    # print(BB)
+
+    new_m_b = AA.dot(m_b) + BBu.dot(K0).dot(I).T
+    new_sigma_b = AA.dot(sigma_b).dot(AA.T) + BB.dot(noise_covariance).dot(BB.T)
+
+    return new_m_b, new_sigma_b
+
+
+
+
 def plot_belief_state(axis, belief_state, color=(1, 0, 0, 0.5)):
     new_ellipse = Ellipse(xy=(belief_state.mean_b[0], belief_state.mean_b[1]),
                           width=2 * np.sqrt(belief_state.sigma_b[0, 0]), height=2 * np.sqrt(belief_state.sigma_b[1, 1]), angle=0)
@@ -198,3 +245,19 @@ def dynamic_obs_risk(ego_belief_state, obs_belief_state):
     y_risk = norm.cdf(collision_box, y_mean, y_std) - \
         norm.cdf(-collision_box, y_mean, y_std)
     return min(x_risk, y_risk)
+
+
+def compute_risk(mu, std, obs_vertices):
+    Hull = ConvexHull(obs_vertices)
+    Eq = Hull.equations
+    Ao = Eq[:,0:2]
+    bo = -Eq[:,2]
+    R = []
+    for i in range(bo.size):
+        R.append(compute_risk_edge(Ao[i,:], bo[i], mu, std))
+    return float(min(R))
+
+def compute_risk_edge(Ao, bo, mu, std):
+    mu2 = Ao.dot(mu) - bo
+    std2 = np.sqrt(Ao.dot(std*std).dot(Ao))
+    return norm.cdf(0, mu2, std2) - norm.cdf(-np.inf, mu2, std2)

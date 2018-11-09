@@ -1,33 +1,55 @@
 #!/usr/bin/env python
 
-# author: Yun Chang
-# email: yunchang@mit.edu
-# re-implementation of Pedro Santana's RAO* algorithm
-# RAO*: a risk-aware planner for POMDP's
-# Forward, heuristic planner for partially-observable
-# chance-constrained domains
+# authors: Matt Deyo and Yun Chang
+# email: mdeyo@mit.edu and yunchang@mit.edu
+# Implementation of iRAO* from mdeyo thesis Feb 2018
 
 import operator
 import numpy as np
 import time
-import random
 from collections import deque
 
 from raostarhypergraph import RAOStarGraphNode, RAOStarGraphOperator, RAOStarHyperGraph
 from belief import BeliefState, avg_func, bound_prob
 from belief import predict_belief, update_belief, compute_observation_distribution, is_terminal_belief
+from iterative_raostar import *
 
 
-class RAOStar(object):
+class iRAO_Executive(object):
+
+    def __init__(self, model, initial_belief, cc=0.0, cc_type='o',
+                 terminal_prob=1.0, debugging=False, randomization=0.0, halt_on_violation=False, ashkan_continuous=False):
+        print(cc_type)
+        self.planner = iRAOStar(model, cc, debugging=debugging)
+
+        # start with graph and policy being None and spent_risk = 0
+        P, G = self.planner.incremental_search(initial_belief, None, None, 0)
+        P = clean_policy(P)
+        model.print_model()
+        model.print_policy(P)
+        # print(P)
+        #
+        # most_likely_policy(G, model)
+        #
+        # print(len(G.nodes), G.nodes)
+        # print(G.root)
+        # next = next_child(G, G.root)
+        # next = next_child(G, next)
+        # next = next_child(G, next)
+        # G.update_root_and_purge(next)
+        # print(len(G.nodes), G.nodes)
+
+
+class iRAOStar(object):
     # find optimal policy and/or tree representing partially
     # observable domains
 
-    def __init__(self, model, cc=0.0, cc_type='o', fixed_horizon=np.inf,
-                 terminal_prob=1.0, debugging=False, randomization=0.0, halt_on_violation=False, random_node_selection=False):
+    def __init__(self, model, cc=0.0, cc_type='o', terminal_prob=1.0, debugging=False, randomization=0.0, halt_on_violation=False, ashkan_continuous=False):
 
         self.model = model
         self.cc = cc
         self.cc_type = cc_type
+        print(self.cc_type)
         # type of chance constraint could be "overall": execution risk
         # bound at the root (constraints overall execution); "everywhere":
         # bounds the execution risk at every policy node.
@@ -37,11 +59,10 @@ class RAOStar(object):
         self.policy_ancestors = {}  # ancestors set for updating policy
         self.halt_on_violation = halt_on_violation
         # whether constraint violations is terminal
+        self.continuous_belief = ashkan_continuous
         self.debugging = debugging
 
-        self.fixed_horizon = fixed_horizon
-        self.random_node_selection = random_node_selection
-        self.end_search_on_likelihood = False
+        self.end_search_on_likelihood = True
 
         self.debug("halting", self.halt_on_violation)
 
@@ -101,22 +122,110 @@ class RAOStar(object):
 
         return True
 
-    def search(self, b0, time_limit=np.inf, iter_limit=np.inf):
+    def local_execution_risk(self, graph, old_node, new_node):
+        # This function actually returns local execution risk from following
+        # the policy at old_node and the realized_likelihood from old_node to
+        # new_node to avoid looping over children twice
+        children = graph.hyperedge_successors(node, node.best_action)
+        children_risk_term = 0
+        new_node_transition = None
+
+        for c in children:
+            # find matching parent to get transition probability
+            for parent in graph.all_node_ancestors(n):
+                if parent[0] == node and parent[1] == node.best_action:
+                    transition = parent[2]
+                    # summation of transition prob * state risk for each child
+                    children_risk_term += c.risk * transition
+                    # save the transition if the child is the new_node
+                    if c == new_node:
+                        new_node_transition = transition
+                    break
+
+        # Error if the new_node is not seen the children of old_node
+        if not new_node_transition:
+            raise ValueError('new node:' + str(new_node) +
+                             ' not child in policy, possible multi-step')
+
+        ler = node.risk + (1 - node.risk) * children_risk_term
+        return (ler, new_node_transition)
+
+    def risk_update(self):
+        self.debug('risk_update')
+        queue = deque([self.graph.root])
+        violations = []
+
+        # while q not empty
+        while len(queue) > 0:
+            # remove node n from q with no descendant in Q
+            n = queue.popleft()
+
+            # scale likelihood by 1/theta
+            n.likelihood = n.likelihood * (1 / self.realized_likelihood)
+
+            # if new likelihood * risk > delta - spent_risk:
+            if n.likelihood * n.exec_risk > self.cc - self.spent_risk:
+                # mark n as violation
+                violations.append(n)
+            else:
+                # add policy children to queue
+                for c in self.graph.policy_successors(n):
+                    queue.append(c)
+        # w <- set of violation nodes
+        # call update policy on all nodes in w
+        self.update_values_and_best_actions(self, violations)
+        # Updates the mapping of ancestors on the best policy graph and the
+        # list of open nodes
+        self.update_policy_open_nodes()
+
+    def incremental_search(self, b_current, previous_graph, previous_policy, spent_risk=0, time_limit=np.inf, iter_limit=np.inf):
         self.start_time = time.time()
-        print('\n RAO* initialized with belief: ' + str(b0) + '\n .\n .\n .')
-        self.init_search(b0)
-        count = 0
+
+        self.new_graph = previous_graph
+        self.new_policy = previous_policy
+
+        print('\n iRAO* with belief: ' + str(b_current) + '\n .\n .\n .')
+
+        if previous_graph == None and previous_policy == None:
+            self.init_search(b_current)
+
+        else:
+            # obtain the ler(root|pi) and transition probability of new belief
+            # from previous
+            last_sr, self.realized_likelihood = self.local_execution_risk(
+                previous_graph, previous_graph.root)
+
+            # increment spent risk to reflect the previous root action
+            self.spent_risk = spent_risk + last_sr
+
+            # update the root of explicit graph and policy to be b_current
+            # remove all nodes that are not descendants of b_current
+            self.graph.update_root_and_purge(b_current)
+
+            # run risk_update to find and mark the RISK-VIOLATION nodes in new
+            # policy
+            # TODO
+            self.risk_update()
+
+            # save new explicit graph properly
+            self.graph = new_graph
+
+        # lines 10-12 from mdeyo thesis pseudo code
+        # basically the same as RAO* now
+        iteration_count = 0
         root = self.graph.root
+
         # initial objective at the root, which is the best possible
         # (can only degrade with admissible heuristic)
         prev_root_val = np.inf if (
             self.model.optimization == 'maximize') else -np.inf
         interrupted = False
 
-        while not self.search_termination(count, iter_limit, time_limit):
-            count += 1
+        while not self.search_termination(iteration_count, iter_limit, time_limit):
+            iteration_count += 1
 
-            self.debug('\n\n\n RAO* iteration: ' + str(count) + '\n\n\n')
+            self.debug('\n\n\n RAO* iteration: ' +
+                       str(iteration_count) + '\n\n\n')
             self.debug('opennodes', self.opennodes)
 
             expanded_nodes = self.expand_best_partial_solution()
@@ -128,14 +237,14 @@ class RAOStar(object):
             root_value = root.value
             # root node changed from its best value
             if not np.isclose(root_value, prev_root_val):
-                # if the hpeuristic is admissible, the root value can only
+                # if the heuristic is admissible, the root value can only
                 # degrade
                 if self.is_better(root_value, prev_root_val):
                     print('Warning: root value improved. Check admissibility')
                 else:
                     prev_root_val = root_value
         print('\n RAO* finished planning in ' +
-              "{0:.2f}".format(time.time() - self.start_time) + " seconds after " + str(count) + " iterations\n")
+              "{0:.2f}".format(time.time() - self.start_time) + " seconds after " + str(iteration_count) + " iterations\n")
         policy = self.extract_policy()
 
         return policy, self.graph
@@ -143,8 +252,14 @@ class RAOStar(object):
     def init_search(self, b0):
         # initializes the search fields (initialize graph with start node)
         self.graph = RAOStarHyperGraph(name='G')
-        start_node = RAOStarGraphNode(name=str(b0), value=None, state=BeliefState(b0))
-        
+
+        if self.continuous_belief:
+            start_node = RAOStarGraphNode(
+                name=str(b0), value=None, state=b0)
+        else:
+            start_node = RAOStarGraphNode(
+                name=str(b0), value=None, state=BeliefState(b0))
+
         self.set_new_node(start_node, 0, self.cc, 1.0, 1.0)
         self.debug('root node:')
         self.debug(start_node.state.state_print() + " risk bound: " +
@@ -155,43 +270,57 @@ class RAOStar(object):
 
     def set_new_node(self, node, depth, er_bound, prob, parent_likelihood):
         # sets the fields of a new node
-        b = node.state.belief
-        node.risk = bound_prob(avg_func(b, self.r))
-        # Depth of a node is its dist to the root
-        node.depth = depth
-        node.set_prob(prob)
-        node.set_likelihood(prob * parent_likelihood)
-        # Probability of violating constraints in a belief state. (never
-        # change)
-        if is_terminal_belief(b, self.term, self.terminal_prob):
-            self.set_terminal_node(node)
-        elif node.depth == self.fixed_horizon:
-            # self.set_terminal_node(node)
-            node.value = avg_func(b, self.h)
-            node.terminal = True  # new node is non terminal
-            node.best_action = None  # no action associated yet
-            node.exec_risk_bound = bound_prob(
-                er_bound)  # execution risk bound
-            # avg heuristic estimate of execution risk at node
-            node.set_exec_risk(node.risk)
-            node.risk_upper = node.exec_risk                
+        if self.continuous_belief:
+            b = node.state
+            node.risk = bound_prob(self.r(b))
+            node.depth = depth
+            node.set_prob(prob)
+            node.set_likelihood(prob * parent_likelihood)
+            if self.term(node.state):
+                self.set_terminal_node(node)
+            else:
+                # the value of a node is the average of the heuristic only when it's
+                # first created. After that, the value is given as a function of
+                # its children
+                node.value = self.h(node)
+                node.terminal = False  # new node is non terminal
+                node.best_action = None  # no action associated yet
+                node.exec_risk_bound = bound_prob(
+                    er_bound)  # execution risk bound
+                # avg heuristic estimate of execution risk at node
+                node.set_exec_risk(node.risk)
         else:
-            # the value of a node is the average of the heuristic only when it's
-            # first created. After that, the value is given as a function of
-            # its children
-            node.value = avg_func(b, self.h)
-            node.terminal = False  # new node is non terminal
-            node.best_action = None  # no action associated yet
-            node.exec_risk_bound = bound_prob(
-                er_bound)  # execution risk bound
-            # avg heuristic estimate of execution risk at node
-            node.set_exec_risk(node.risk)
+            b = node.state.belief
+            node.risk = bound_prob(avg_func(b, self.r))
+            # Depth of a node is its dist to the root
+            node.depth = depth
+            node.set_prob(prob)
+            node.set_likelihood(prob * parent_likelihood)
+
+            # Probability of violating constraints in a belief state. (never
+            # change)
+            if is_terminal_belief(b, self.term, self.terminal_prob):
+                self.set_terminal_node(node)
+            else:
+                # the value of a node is the average of the heuristic only when it's
+                # first created. After that, the value is given as a function of
+                # its children
+                node.value = avg_func(b, self.h)
+                node.terminal = False  # new node is non terminal
+                node.best_action = None  # no action associated yet
+                node.exec_risk_bound = bound_prob(
+                    er_bound)  # execution risk bound
+                # avg heuristic estimate of execution risk at node
+                node.set_exec_risk(node.risk)
 
     def set_terminal_node(self, node):
         # set fields of a terminal node
         b = node.state.belief
         node.set_terminal(True)
-        node.set_value(avg_func(b, self.h))
+        if self.continuous_belief:
+            node.set_value(self.h(b))
+        else:
+            node.set_value(avg_func(b, self.h))
         node.set_exec_risk(node.risk)
         node.set_best_action(None)
         self.graph.remove_all_hyperedges(node)  # terminal node has no edges
@@ -213,14 +342,14 @@ class RAOStar(object):
         # self.debug(n.)
         # self.debug(queue)
 
-        # self.graph.reset_likelihoods()
-        # self.graph.root.likelihood = 1.0
+        self.graph.reset_likelihoods()
+        self.graph.root.likelihood = 1.0
 
         while len(queue) > 0:
             node = queue.popleft()
 
-            # if node in expanded:
-            #     continue
+            if node in expanded:
+                continue
 
             parent_l = node.likelihood
             self.debug('\n', node.state.state_print(),
@@ -234,10 +363,17 @@ class RAOStar(object):
                 self.debug("children risk bound", [
                            c.exec_risk_bound for c in children])
                 for n in children:
-                    # if n not in expanded:
-                    queue.append(n)
+                    transition = None
+                    for parent in self.graph.all_node_ancestors(n):
+                        if parent[0] == node and parent[1] == node.best_action:
+                            transition = parent[2]
+                            break
+                    print(n.state.state_print(), n.likelihood,
+                          parent_l, transition)
 
-                        
+                    n.likelihood += parent_l * transition
+                    if n not in expanded:
+                        queue.append(n)
             else:  # no best action has been assigned yet
                 self.debug('leaf node!')
                 self.leafnodes.add(node)
@@ -261,28 +397,28 @@ class RAOStar(object):
         self.debug('\n', 'Selected opennodes:', self.opennodes)
 
     def get_all_actions(self, belief, A):
-        if len(belief) > 0:
-            all_node_actions = []
-            action_ids = set()  # Uses str(a) as ID
-            for particle_key, particle_prob in belief.items():
-                new_actions = [a for a in A(
-                    particle_key) if not str(a) in action_ids]
-                # add action and make sure no overlap
-                all_node_actions.extend(new_actions)
-                action_ids.update([str(a) for a in new_actions])
-            return all_node_actions
+        if self.continuous_belief:
+            return A(belief)
         else:
-            return []
+            if len(belief) > 0:
+                all_node_actions = []
+                action_ids = set()  # Uses str(a) as ID
+                for particle_key, particle_prob in belief.items():
+                    new_actions = [a for a in A(
+                        particle_key) if not str(a) in action_ids]
+                    # add action and make sure no overlap
+                    all_node_actions.extend(new_actions)
+                    action_ids.update([str(a) for a in new_actions])
+                return all_node_actions
+            else:
+                return []
 
     def expand_best_partial_solution(self):
         # expands a node in the graph currently contained in the best
         # partial solution. Add new nodes and edges on the graph
+        nodes_to_expand = self.opennodes
+        self.opennodes = None
 
-        # nodes_to_expand = self.opennodes
-        # self.opennodes = None
-
-        nodes_to_expand = [self.choose_node()]  # choose best node
-        
         for node in nodes_to_expand:
             self.debug('\n ******* expanding node *******')
             self.debug(node.state.state_print())
@@ -312,10 +448,15 @@ class RAOStar(object):
 
             if len(all_node_actions) > 0:
                 added_count = 0
-
                 for act in all_node_actions:
                     self.debug("\n", act)
-                    child_obj_list, prob_list, prob_safe_list, new_child_idxs = self.obtain_child_objs_and_probs(belief, self.T, self.O, self.r, act)
+
+                    if self.continuous_belief:
+                        child_obj_list, prob_list, prob_safe_list, new_child_idxs = self.obtain_continuous_child_and_probs(
+                            belief, self.T, self.O, self.r, act)
+                    else:  # action
+                        child_obj_list, prob_list, prob_safe_list, new_child_idxs = self.obtain_child_objs_and_probs(belief,
+                                                                                                                     self.T, self.O, self.r, act)
 
                     # initializes the new child nodes
                     for c_idx in new_child_idxs:
@@ -339,8 +480,11 @@ class RAOStar(object):
                         for idx, child in enumerate(child_obj_list):
                             child.exec_risk_bound = er_bounds[idx]
 
-                        # average instantaneous value (cost or reward)
-                        avg_op_value = avg_func(belief, self.V, act)
+                        if self.continuous_belief:
+                            avg_op_value = self.V(belief, act)
+                        else:
+                            # average instantaneous value (cost or reward)
+                            avg_op_value = avg_func(belief, self.V, act)
 
                         act_obj = RAOStarGraphOperator(name=str(act), op_value=avg_op_value,
                                                        properties={'prob': prob_list, 'prob_safe': prob_safe_list})
@@ -359,10 +503,14 @@ class RAOStar(object):
                 # self.debug('action not added')
                 # self.set_terminal_node(node)
 
-                if not is_terminal_belief(node.state.belief, self.term, self.terminal_prob):
+                if self.continuous_belief:
+                    if not self.term(node.state):
+                        self.mark_deadend(node)
+                else:
+                    if not is_terminal_belief(node.state.belief, self.term, self.terminal_prob):
                         self.mark_deadend(node)
 
-                if not node.terminal and not node.deadend:
+                if not node.terminal:
                     self.set_terminal_node(node)
 
         # returns the list of node either added actions to or marked terminal
@@ -398,7 +546,7 @@ class RAOStar(object):
                 er_bound = min([node.exec_risk_bound, self.er_cap])
                 if self.cc_type == 'everywhere':
                     er_bound = self.er_cap
-                    
+                print(er_bound)
                 best_action_idx = -1
                 best_Q = self.initial_Q  # -inf or inf based on optimization
                 best_D = -1  # depth
@@ -473,29 +621,6 @@ class RAOStar(object):
                         print(
                             'WARNING: node Q value improved, which might indicate inadmissibility.')
 
-
-                    # propagate execution risk bound down to all descendants (added by Sungkwoen)
-                    er_bound_updating_nodes = deque([node])
-
-                    while len(er_bound_updating_nodes) > 0:
-                        updating_node = er_bound_updating_nodes.popleft()
-
-                        if updating_node.best_action:
-                            best_action_updating = updating_node.best_action
-                            er_bound_updating = updating_node.exec_risk_bound
-                            risk_updating = updating_node.risk
-                            probs_updating = best_action_updating.properties['prob']
-                            prob_safe_updating = best_action_updating.properties['prob_safe']
-                            children_updating = self.graph.hyperedge_successors(updating_node, best_action_updating)
-
-                            child_er_bounds, er_bound_infeasible = self.compute_exec_risk_bounds(er_bound_updating, risk_updating, children_updating, prob_safe_updating)
-
-                            for idx, child in enumerate(children_updating):
-                                child.exec_risk_bound = child_er_bounds[idx]
-
-                            er_bound_updating_nodes.extend(children_updating)
-
-                        
                     # updates optimal value est, execution tisk est, and mark
                     # best action
                     node.set_value(best_Q)
@@ -527,10 +652,14 @@ class RAOStar(object):
                     # minimizing
 
                     # only mark inf value deadend if not actually the goal
-                    if not is_terminal_belief(node.state.belief, self.term, self.terminal_prob):
+                    if self.continuous_belief:
+                        if not self.term(node.state):
+                            self.mark_deadend(node)
+                    else:
+                        if not is_terminal_belief(node.state.belief, self.term, self.terminal_prob):
                             self.mark_deadend(node)
 
-                    if not node.terminal and not node.deadend:
+                    if not node.terminal:
                         self.set_terminal_node(node)
 
                     # mdeyo: some further testing shows that both these
@@ -545,8 +674,6 @@ class RAOStar(object):
             node.value = -np.inf
         elif self.model.optimization == 'minimize':
             node.value = np.inf
-
-        node.deadend = True
         return node
 
     def compute_exec_risk_bounds(self, parent_bound, parent_risk, child_list, prob_safe_list, is_terminal_node=False):
@@ -633,25 +760,20 @@ class RAOStar(object):
         # self.debug("===========================")
         queue = deque([self.graph.root])  # from root
         policy = {}
-        k=0
         while len(queue) > 0:
             node = queue.popleft()
             if node.best_action != None:
-                policy[(node.name,node.probability,node.depth)] = node.best_action.name
+                policy[node.name] = node.best_action.name
                 children = self.graph.hyperedges[node][node.best_action]
                 for c in children:
                     queue.append(c)
-                    k=k+1
         return policy
 
     def choose_node(self):
         # chooses an element from open list to be expanded
         if len(self.opennodes) > 1:
             # selects best node to expand
-            if self.random_node_selection is True:
-                node = random.sample(self.opennodes,1)[0]  # select random node
-            else:
-                node = self.select_best(self.opennodes)  # select best node
+            node = self.select_best(self.opennodes)  # select best node
             self.opennodes.remove(node)
         else:  # if there is only one, use that one
             node = self.opennodes.pop()
@@ -678,6 +800,67 @@ class RAOStar(object):
             node = self.opennodes.pop()
         return node
 
+    def obtain_continuous_child_and_probs(self, belief, T, O, r, act):
+        '''
+        predicted_beliefs, predicted_safe_beliefs = continuous_predict_belief(
+            belief, T, act)
+        '''
+        pred_belief = {}
+        # pred_belief_safe = {}
+        # sum_safe = 0.0
+
+        for next_state, next_prob in T(belief, act):
+            # Ensures that impossible transitions do not 'pollute' the belief
+            # with 0 probability particles.
+            if next_prob > 0.0:
+                if next_state in pred_belief:
+                    pred_belief[next_state] += next_prob
+                else:
+                    pred_belief[next_state] = next_prob
+                # if safe_state:  # Safe belief state
+                #     if next_state in pred_belief_safe:
+                #         pred_belief_safe[next_state] += next_prob
+                #     else:
+                #         pred_belief_safe[next_state] = next_prob
+        # if sum_safe > 0.0:  # Not all particles are on violating paths
+        #     # Normalizes the safe predicted belief
+        #     for next_state, b_tuple in pred_belief_safe.items():
+        #         pred_belief_safe[next_state] /= sum_safe
+        child_obj_list = []
+        prob_list = []
+        prob_safe_list = []
+        new_child_idxs = []
+        count = 0
+        for child_blf_state, child_prob in pred_belief.items():
+            # Performs belief state update
+            # child_blf_state = update_belief(pred_belief, state_to_obs, obs)
+            candidate_child_obj = RAOStarGraphNode(
+                name=str(child_blf_state), value=None, state=child_blf_state)
+            if self.graph.has_node(candidate_child_obj):  # if node already present
+                child_obj = self.graph.nodes[candidate_child_obj.name]
+                self.debug(child_blf_state.state_print())
+                self.debug(candidate_child_obj.name)
+                self.debug(
+                    '********************  search node already present  ***************')
+            else:
+                # the node initiated
+                child_obj = candidate_child_obj
+                new_child_idxs.append(count)
+            child_obj_list.append(child_obj)
+            prob_list.append(child_prob)
+
+            # adding all children probability to safe list for continuous
+            prob_safe_list.append(child_prob)
+            # if obs in obs_distribution_safe:
+            #     obs_safe_prob = obs_distribution_safe[obs]
+            #     prob_safe_list.append(obs_safe_prob)
+            # else:
+            #     prob_safe_list.append(0.0)
+            count += 1
+        # prob_safe_list = child
+        # self.debug('child_obj_list', child_obj_list)
+        return child_obj_list, prob_list, prob_safe_list, new_child_idxs
+
     def obtain_child_objs_and_probs(self, belief, T, O, r, act):
         # predicts new particles using current belief and state transition
         # mdeyo: pred_belief_safe is not being used
@@ -701,12 +884,12 @@ class RAOStar(object):
             child_blf_state = update_belief(pred_belief, state_to_obs, obs)
             candidate_child_obj = RAOStarGraphNode(
                 name=str(child_blf_state), value=None, state=BeliefState(child_blf_state))
-            # if self.graph.has_node(candidate_child_obj):  # if node already present
-            #     child_obj = self.graph.nodes[candidate_child_obj.name]
-            # else:
-            #     # the node initiated
-            child_obj = candidate_child_obj
-            new_child_idxs.append(count)
+            if self.graph.has_node(candidate_child_obj):  # if node already present
+                child_obj = self.graph.nodes[candidate_child_obj.name]
+            else:
+                # the node initiated
+                child_obj = candidate_child_obj
+                new_child_idxs.append(count)
             child_obj_list.append(child_obj)
             prob_list.append(obs_prob)
 

@@ -195,6 +195,7 @@ def compute_observation_distribution(pred_belief, pred_belief_safe, O):
 
                         # Accumulates the probabilities
                         sum_probs[i] += obs_prob * particle_prob
+    # print('distribs', obs_distribution, obs_distribution_safe, state_to_obs)
 
     return obs_distribution, obs_distribution_safe, state_to_obs
 
@@ -212,8 +213,8 @@ def update_belief(pred_belief, state_to_obs, obs):
         found_obs = False
         for possible_obs, obs_prob in state_to_obs[state]:
             if possible_obs == obs:  # obs is a possible observation
-                prob *= obs_prob  # Likelihood
-                prob_sum += prob  # Prob. sum
+                post_belief[state] = prob*obs_prob  # Likelihood
+                prob_sum += post_belief[state]  # Prob. sum
                 found_obs = True
                 break
         # If obs was not found, that particle is removed (zero probability)

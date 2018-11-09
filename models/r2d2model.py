@@ -11,12 +11,15 @@ from belief import BeliefState
 class R2D2Model(object):
     # noted there are 7 blocks total, A through G
     # G is the goal, F is fire
-    def __init__(self, icy_blocks, DetermObs=True):
+    def __init__(self, length=1, DetermObs=True):
         # icy blocks are defined blocks that are icy
-        self.icy_blocks = icy_blocks
+        self.icy_blocks = []
         self.icy_blocks_lookup = {}
-        for icy in icy_blocks:
+        for i in range(length + 1):
+            icy = (1, i)
+            self.icy_blocks.append((1, i))
             self.icy_blocks_lookup[icy] = 1
+
         self.icy_move_forward_prob = 0.8
         self.DetermObs = DetermObs
         # if observation deterministic or not. If determinstic, once move,
@@ -26,12 +29,21 @@ class R2D2Model(object):
             self.obsProb = 0.6
         # environment will be represented as a 3 x 3 grid, with (2,0) and (2,2) blocked
         # top left corner of grid is (0,0) and first index is row
-        self.env = np.zeros([3, 3])
+        self.length = length
+        self.env = np.zeros([3, 2 + self.length])
+
+        # setup bottom left and right corners as impassible
         self.env[2, 0] = 1
-        self.env[2, 2] = 1
+        self.env[2, self.length + 1] = 1
+
         # fire located at self.env[2,1]: terminal
-        self.fires = [(2, 1)]
-        self.goal = (1, 2)  # goal position
+        self.fires = []
+        for i in range(self.length):
+            self.fires.append((2, i + 1))
+
+        # goal position
+        self.goal = (1, self.length + 1)
+
         self.optimization = 'minimize'  # want to minimize the steps to goal
         self.action_map = {
             "right": 5,
@@ -41,6 +53,8 @@ class R2D2Model(object):
         }
         self.action_list = [(1, 0, "down"), (0, 1, "right"),
                             (-1, 0, "up"), (0, -1, "left")]
+        self.action_list = [(1, 0, "down"), (0, 1, "right"),
+                            (-1, 0, "up")]
 
     def state_valid(self, state):  # check if a particular state is valid
         if state[0] < 0 or state[1] < 0:
@@ -52,8 +66,11 @@ class R2D2Model(object):
 
     def in_a_fire(self, state):
         # print(state)
+        # print(self.fires)
+
         for fire in self.fires:
             if state[0] == fire[0] and state[1] == fire[1]:
+                # print('   risk!!   ')
                 return True
         return False
 
@@ -90,6 +107,7 @@ class R2D2Model(object):
                               state[1] + action[1], state[2] + 1)
         if not self.state_valid(intended_new_state):
             return newstates
+
         if (state[0], state[1]) in self.icy_blocks and "right" in action:
             # print('got right action!')
             newstates.append([intended_new_state, self.icy_move_forward_prob])
@@ -130,20 +148,28 @@ class R2D2Model(object):
                 return dist
 
     def state_risk(self, state):
+        # For some reason we get a BeliefState here when deadend state found
+        if isinstance(state, BeliefState):
+            state = state.belief.keys()[0]
         if self.in_a_fire(state):
             return 1.0
         return 0.0
 
     def costs(self, action):
-        if action[2] == "up":
-            return 2  # bias against up action, models climbing above ice as harder
-        else:
-            return 1
+        return 1  # try uniform cost for all actions
+        # if action[2] == "up":
+        #     return 2  # bias against up action, models climbing above ice as harder
+        # else:
+        #     return 1
 
     def values(self, state, action):
         # return value (heuristic + cost)
-        # return self.costs(action)
-        return self.costs(action) + self.heuristic(state)
+        # print('state here', state)
+        # if state[0] == 0:
+            # return 2.0
+        # return 1.0
+        return self.costs(action)
+        # return self.costs(action) + self.heuristic(state)
 
     def heuristic(self, state):
         # square of euclidean distance as heuristic
@@ -190,7 +216,8 @@ class R2D2Model(object):
             row = int(coords.split(",")[1])
             depth = int(coords.split(",")[2])
             col_row_str = str(col) + ',' + str(row)
-            action_string = policy[key]['action']
+            action_string = policy[key]
+
             for action_name in self.action_map:
                 if action_name in action_string:
                     if col_row_str not in depth_found:  # first depth found

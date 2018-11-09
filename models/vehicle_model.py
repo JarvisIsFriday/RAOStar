@@ -5,6 +5,65 @@
 # simple vehicle models based on MERS Toyota work for rao star
 
 import numpy as np
+import copy
+
+
+def calculate_permutations(model, state, actions, d):
+    state_seq = [state]
+    permutations = []
+    for a in actions:
+        action_seq = [a]
+        new_seq = extend_sequence(
+            model, state_seq, [a], actions, 0, d)
+        if new_seq:
+            if isinstance(new_seq, list):
+                for i in new_seq:
+                    permutations.append(i)
+            else:
+                permutations.append(new_seq)
+    return permutations
+
+
+def extend_sequence(model, state_seq, action_seq, actions, t, d):
+    latest_action = action_seq[-1]
+    latest_state = state_seq[-1]
+    print('extend_sequence', model, state_seq, action_seq, t, d)
+
+    if not (latest_action.preconditions(latest_state, model)):
+        # Cannot use this sequence ending in lastest_action, fails
+        # preconditions
+        return None
+
+    # time of next decision epoch is lastest action completed:
+    new_t = t + latest_action.length_of_action
+
+    if new_t > d:
+        # Then we have an incompleted action sequence
+        return {'states': state_seq, 'actions': action_seq, 'fraction': (d - t) / latest_action.length_of_action, 'status': 'INCOMPLETE'}
+    else:
+        new_agent_state = latest_action.effects(latest_state, model)
+        new_multi_state = MultiState(new_t)
+        new_multi_state.add_vehicle_state(new_agent_state)
+        new_state_seq = list(state_seq)
+        new_state_seq.append(new_multi_state)
+        if new_t == d:
+            print('perfect timing')
+            # Perfect timing, synchronized action endorse
+            return {'states': new_state_seq, 'actions': action_seq, 'fraction': 1, 'status': 'COMPLETE'}
+        else:
+            permutations = []
+            for a in actions:
+                new_action_seq = list(action_seq)
+                new_action_seq.append(a)
+                new_seq = extend_sequence(
+                    model, new_state_seq, new_action_seq, actions, new_t, d)
+                if new_seq:
+                    if isinstance(new_seq, list):
+                        for i in new_seq:
+                            permutations.append(i)
+                    else:
+                        permutations.append(new_seq)
+            return permutations
 
 
 class VehicleState(object):
@@ -57,6 +116,9 @@ class MultiState(object):
     def print_multistate(self):
         print(self.get_multistate_str())
 
+    def __repr__(self):
+        return self.get_multistate_str()
+
 
 class GeordiModel(object):
     '''First Python version of Geordi vehicles model, this one for intersections.
@@ -70,6 +132,8 @@ class GeordiModel(object):
 
     def __init__(self, vehicle_models=[], road=None):
         print('Made GeordiModel! 2.0')
+        self.optimization = 'minimize'  # want to minimize the steps to goal
+
         self.vehicle_models = {}
         self.road_model = road
         self.controllable_vehicle = None
@@ -128,13 +192,16 @@ class GeordiModel(object):
     ##  API required by RAO*  ##
         self.A = model.actions
         self.T = model.state_transitions
-        self.O = model.observations -- only for POMDP
+        self.O = model.observations
         self.V = model.values
         self.h = model.heuristic
         self.r = model.state_risk
         self.e = model.execution_risk_heuristic
         self.term = model.is_terminal
     '''
+
+    def observations(self, state):
+        return [(state, 1.0)]
 
     def actions(self, state):
         '''RAO* API - return list of available_actions in given multi-state state'''
@@ -144,7 +211,7 @@ class GeordiModel(object):
         '''RAO* API - return distribution of multi-states that result from
             taking given action in given multi-state'''
 
-        print('state_transitions', state, action)
+        # print('state_transitions', state, action)
 
         new_ego_vehicle_state = action.effects(state, self)
         timestep = state.timestep
@@ -152,9 +219,9 @@ class GeordiModel(object):
 
         # list of lists that have state and probability,
         # for example: [[state_2, prob],[state_3, prob]]
-        new_state_distribution = []
+        # new_state_distribution = []
 
-        print(len(self.vehicle_models))
+        # print(len(self.vehicle_models))
 
         # Edge case: assume it's just our controllable vehicle??
         if len(self.vehicle_models) == 1:
@@ -163,84 +230,111 @@ class GeordiModel(object):
             return [[new_multi_state, 1.0]]
 
         # Regular permutation calculations
-        state_distribution = []
-        i = 0
+        state_distribution = [{'prob': 1, 'states': [new_ego_vehicle_state]}]
+
         for vehicle_name, vehicle_model in self.vehicle_models.items():
+            # print('each vehicle:', vehicle_name)
             # If selected vehicle is the controllable_vehicle
             if vehicle_model == self.controllable_vehicle:
                 # Don't further permutate over our actions
                 continue
 
+            new_state_distribution = []
+            for action in vehicle_model.get_available_actions(state, self):
+                new_state = action.effects(state, self)
+                for combo in state_distribution:
+                    new_combo = copy.deepcopy(combo)
+                    new_combo['states'].append(new_state)
+                    new_combo['prob'] = new_combo['prob'] * 0.5
+                    new_state_distribution.append(new_combo)
+                # print(new_state)
+                # print(new_state.previous_action)
+
+            state_distribution = new_state_distribution
+
             # If this is the first uncontrollable vehicle selected
-            if i == 0:
-                new_state_distribution = []
-                # Start list of permutations with this and ego state
-                for action in vehicle_model.get_available_actions(state, self):
-                    new_state = action.effects(state, self)
-                    new_state_distribution.append(
-                        [new_state, new_ego_vehicle_state])
-                    print(new_state)
-                    print(new_state.previous_action)
-                state_distribution = new_state_distribution
+            # if i == 0:
+            #     new_state_distribution = []
+            #     # Start list of permutations with this and ego state
+            #     for action in vehicle_model.get_available_actions(state, self):
+            #         new_state = action.effects(state, self)
+            #         new_state_distribution.append(
+            #             [new_state, new_ego_vehicle_state])
+            #         print(new_state)
+            #         print(new_state.previous_action)
+            #     state_distribution = new_state_distribution
+            #
+            # else:
+            #     new_state_distribution = []
+            #     # Start list of permutations with this and ego state
+            #     for action in vehicle_model.get_available_actions(state, self):
+            #         new_state = action.effects(state, self)
+            #         for combo in state_distribution:
+            #             new_combo = combo.copy()
+            #             new_combo.append(new_state)
+            #             new_state_distribution.append(new_combo)
+            #         print(new_state)
+            #         print(new_state.previous_action)
+            #     state_distribution = new_state_distribution
 
-            else:
-                new_state_distribution = []
-                # Start list of permutations with this and ego state
-                for action in vehicle_model.get_available_actions(state, self):
-                    new_state = action.effects(state, self)
-                    for combo in state_distribution:
-                        new_combo = combo.copy()
-                        new_combo.append(new_state)
-                        new_state_distribution.append(new_combo)
-                    print(new_state)
-                    print(new_state.previous_action)
-                state_distribution = new_state_distribution
+            # print(i)
+            # print('state_distribution', state_distribution)
 
-            print(i)
-            print('state_distribution', state_distribution)
+            # print(vehicle_name, self.vehicle_models[vehicle_name].get_available_actions(
+            # state, self))
 
-            print(vehicle_name, self.vehicle_models[vehicle_name].get_available_actions(
-                state, self))
-
-            i += 1
+            # i += 1
 
         # intended_new_state = (state[0] + action[0],
         #                       state[1] + action[1])
         # added depth to the state
-        intended_new_state = (state[0] + action[0],
-                              state[1] + action[1], state[2] + 1)
-        if not self.state_valid(intended_new_state):
-            return newstates
-        if (state[0], state[1]) in self.icy_blocks and "right" in action:
-            # print('got right action!')
-            newstates.append([intended_new_state, self.icy_move_forward_prob])
-            for slip in [-1, 1]:
-                slipped = [(action[i] + slip) % 2 * slip for i in range(2)]
-                # slipped_state = (state[0] + slipped[0],
-                #                  state[1] + slipped[1])
-                # added depth to the state
-                slipped_state = (state[0] + slipped[0],
-                                 state[1] + slipped[1], state[2] + 1)
-                if self.state_valid(slipped_state):
-                    newstates.append(
-                        [slipped_state, (1 - self.icy_move_forward_prob) / 2])
-        else:
-            newstates.append([intended_new_state, 1.0])
+        # intended_new_state = (state[0] + action[0],
+        #                       state[1] + action[1], state[2] + 1)
+        # if not self.state_valid(intended_new_state):
+        #     return newstates
+        # if (state[0], state[1]) in self.icy_blocks and "right" in action:
+        #     # print('got right action!')
+        #     newstates.append([intended_new_state, self.icy_move_forward_prob])
+        #     for slip in [-1, 1]:
+        #         slipped = [(action[i] + slip) % 2 * slip for i in range(2)]
+        #         # slipped_state = (state[0] + slipped[0],
+        #         #                  state[1] + slipped[1])
+        #         # added depth to the state
+        #         slipped_state = (state[0] + slipped[0],
+        #                          state[1] + slipped[1], state[2] + 1)
+        #         if self.state_valid(slipped_state):
+        #             newstates.append(
+        #                 [slipped_state, (1 - self.icy_move_forward_prob) / 2])
+        # else:
+        #     newstates.append([intended_new_state, 1.0])
 
         # Need to normalize probabilities for cases where slip only goes to one
         # cell, not two possible cells
-        sum_probs = sum(n for _, n in newstates)
-        for child in newstates:
-            child[1] = child[1] / sum_probs
+        # sum_probs = sum(n for _, n in newstates)
+        # for child in newstates:
+            # child[1] = child[1] / sum_probs
 
-        return newstates
+        sum_probs = sum(c['prob'] for c in state_distribution)
+
+        new_states = []
+        for outcome in state_distribution:
+            new_multi_state = MultiState(timestep + duration)
+            for agent in outcome['states']:
+                new_multi_state.add_vehicle_state(agent)
+            new_states.append([new_multi_state, outcome['prob'] / sum_probs])
+
+        return new_states
+
+    def goal_function(self, state):
+        if state.get_state('Ego').state['x'] > 10:
+            return True
 
     def is_terminal(self, state):
         '''RAO* API - return True if this state is terminal, either planning
         horizon edge, goal state, or terminal failure'''
-        if self.iterative_deepening:
-            if state.depth == self.planning_horizon:
-                return True
+        # if self.iterative_deepening:
+        # if state.depth == self.planning_horizon:
+        # return True
         if self.goal_function(state):
             return True
 
@@ -248,6 +342,8 @@ class GeordiModel(object):
         '''RAO* API - return 1.0 if multi-state breaks constraint'''
         # TODO - some sort of crash function, if ego vehicle too close to other
         # vehicles
+
+        return 0.0
         if self.in_a_fire(state):
             return 1.0
         return 0.0
@@ -255,6 +351,7 @@ class GeordiModel(object):
     def values(self, state, action):
         '''RAO* API - return value of a state (heuristic + cost)'''
         # return value (heuristic + cost)
+        return self.costs(action)
         return self.costs(action) + self.heuristic(state)
 
     def heuristic(self, state):
@@ -263,6 +360,9 @@ class GeordiModel(object):
         # mdeyo: found this issue! We are trying to minimize the values so the
         # heuristic should be an underestimate,which the square of distance is
         # not if each action then cost 1 or 2
+        ego_x = state.get_state('Ego').state['x']
+        print('heuristic', ego_x, 10 - ego_x)
+        return 10 - ego_x
         return np.sqrt(sum([(self.goal[i] - state[i])**2 for i in range(2)]))
 
     def execution_risk_heuristic(self, state):
@@ -271,6 +371,7 @@ class GeordiModel(object):
 
     def costs(self, action):
         '''Return cost of given action, should call a cost function specific to ego vehicle model'''
+        return action.cost
         if action[2] == "up":
             return 2  # bias against up action, models climbing above ice as harder
         else:
@@ -468,8 +569,8 @@ def move_forward_action(ego=False):
 
 
 def merge_left_action(ego=False):
-    action_model = ActionModel("merge left", 1)
-    length_of_action = 3
+    length_of_action = 1
+    action_model = ActionModel("merge left", 2, duration=length_of_action)
 
     def preconditions(name, multi_state, model):
         if not isinstance(model, GeordiModel):
@@ -515,8 +616,8 @@ def merge_left_action(ego=False):
 
 
 def merge_right_action(ego=False):
-    action_model = ActionModel("merge right", 1)
-    length_of_action = 3
+    length_of_action = 1
+    action_model = ActionModel("merge right", 2, duration=length_of_action)
 
     def preconditions(name, multi_state, model):
         if not isinstance(model, GeordiModel):

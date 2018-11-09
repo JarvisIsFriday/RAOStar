@@ -43,6 +43,10 @@ Defines the structures used in the RAO* hypergraph.
 """
 
 
+import sys
+from collections import deque
+
+
 class GraphElement(object):
     """
     Generic graph element with a name and a unique ID.
@@ -51,6 +55,8 @@ class GraphElement(object):
     def __init__(self, name=None, properties={}):
         self.name = name
         self.properties = properties
+
+    __hash__ = object.__hash__
 
     def set_name(self, new_name):
         self.name = new_name
@@ -74,11 +80,12 @@ class RAOStarGraphNode(GraphElement):
     Class for nodes in the RAO* hypergraph.
     """
 
-    def __init__(self, value, state, best_action=None, terminal=False, name=None,
+    def __init__(self, value, state, best_action=None, terminal=False, deadend=False, name=None,
                  properties={}, make_unique=False):
         super(RAOStarGraphNode, self).__init__(name, properties)
         self.value = value  # Q value
         self.terminal = terminal  # Terminal flag
+        self.deadend = deadend # Deadend flag. Note that deadend is different from terminal. (added by Sungkweon)
         self.state = state  # Belief state
         self.best_action = best_action  # Best action at the node
 
@@ -87,6 +94,15 @@ class RAOStarGraphNode(GraphElement):
         self.exec_risk_bound = 1.0  # Bound on execution risk
         self.depth = 0  # Initial depth
         self.probability = 0.0
+        self.likelihood = 0.0
+    __hash__ = object.__hash__
+
+    def __eq__(x, y):
+        return isinstance(x, GraphElement) and isinstance(y, GraphElement) and (x.name == y.name) and (x.depth == y.depth)
+        
+
+    def set_likelihood(self, l):
+        self.likelihood = l
 
     def set_prob(self, prob):
         self.probability = prob
@@ -196,6 +212,54 @@ class RAOStarHyperGraph(GraphElement):
         # Dictionary from child to sets of parents {child_key: set(parents)}
         self.parents = {}
 
+        if (sys.version_info > (3, 0)):
+            # Python 3 code in this block
+            self.python3 = True
+        else:
+            # Python 2 code in this block
+            self.python3 = False
+
+    def reset_likelihoods(self):
+        if self.python3:
+            for name, node in self.nodes.items():
+                node.likelihood = 0.0
+        else:
+            for name, node in self.nodes.iteritems():
+                node.likelihood = 0.0
+
+    # def mark_all_node_unreachable(self):
+
+    def update_root_and_purge(self, new_root):
+
+        # reset all reachable markings in the graph
+        for name, node in self.nodes.items():
+            node.reachable = False
+
+        queue = deque([new_root])
+        marked = set()
+        marked.add(new_root)
+        new_root.reachable = True
+
+        while len(queue) > 0:
+            node = queue.popleft()
+
+            if not node.terminal:  # node is not terminal
+
+                children = self.all_descendants(node)
+
+                for c in children:
+                    if c not in marked:
+                        c.reachable = True
+                        marked.add(c)
+                        queue.append(c)
+            # else:  # no best action has been assigned yet
+                # should not need to do anything because we are marking
+                # children of nodes with best_actions
+
+        for name, node in self.nodes.items():
+            if not node.reachable:
+                del self.nodes[name]
+
     def set_nodes(self, new_nodes):
         self.nodes = new_nodes
 
@@ -232,12 +296,13 @@ class RAOStarHyperGraph(GraphElement):
         if not op in self.operators:
             self.operators[op] = op
 
-    def add_hyperedge(self, parent_obj, child_obj_list, op_obj):
+    def add_hyperedge(self, parent_obj, child_obj_list, prob_list, op_obj):
         """Adds a hyperedge between a parent and a list of child nodes, adding
         the nodes to the graph if necessary."""
         # Makes sure all nodes and operator are part of the graph.
         self.add_node(parent_obj)
         self.add_operator(op_obj)
+
         for child in child_obj_list:
             self.add_node(child)
 
@@ -282,10 +347,13 @@ class RAOStarHyperGraph(GraphElement):
             self.hyperedges[parent_obj] = {op_obj: child_obj_list}
 
         # Records the mapping from children to parent nodes
-        for child in child_obj_list:
+        for i, child in enumerate(child_obj_list):
             if not (child in self.parents):
                 self.parents[child] = set()
-            self.parents[child].add(parent_obj)
+            # Added association of action and probability to each parent
+            # This is so we can match transition probabilities when calculating
+            # likelihoods in the policy
+            self.parents[child].add((parent_obj, op_obj, prob_list[i]))
 
     def remove_all_hyperedges(self, node):
         """Removes all hyperedges at a node."""
@@ -296,19 +364,31 @@ class RAOStarHyperGraph(GraphElement):
         """List of all operators at a node."""
         return list(self.hyperedges[node].keys()) if node in self.hyperedges else []
 
+    def all_descendants(self, node):
+        """List of all descendants of a node, from all hyperedges"""
+        '''Currently includes repititions!'''
+        operators = self.all_node_operators(node)
+        descendants = []
+        for o in operators:
+            descendants.extend(self.hyperedge_successors(node, o))
+        return descendants
+
     def all_node_ancestors(self, node):
         """Set of all node parents, considering all hyperedges."""
         if node in self.parents:
             return self.parents[node]
-        else:
-            return set()
+        return set()
+
+    def policy_successors(self, node):
+        if node.best_action:
+            return self.hyperedge_successors(node, node.best_action)
+        return []
 
     def hyperedge_successors(self, node, act):
         """List of children associated to a hyperedge."""
         if node in self.hyperedges and act in self.hyperedges[node]:
             return self.hyperedges[node][act]
-        else:
-            return []
+        return []
 
     def has_node(self, node):
         """Returns whether the hypergraph contains the node"""
