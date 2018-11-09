@@ -95,6 +95,11 @@ class RAOStarGraphNode(GraphElement):
         self.depth = 0  # Initial depth
         self.probability = 0.0
         self.likelihood = 0.0
+    __hash__ = object.__hash__
+
+    def __eq__(x, y):
+        return isinstance(x, GraphElement) and isinstance(y, GraphElement) and (x.name == y.name) and (x.depth == y.depth)
+        
 
     def set_likelihood(self, l):
         self.likelihood = l

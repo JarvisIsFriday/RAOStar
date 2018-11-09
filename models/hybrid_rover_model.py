@@ -85,7 +85,11 @@ class HybridRoverModel(object):
     def state_transitions(self, state, action):
 
         if action=="Sample":
-            return [[(state[0], state[1]+1), self.prob_sample_success], [state, 1-self.prob_sample_success]]
+            m_b = state[0].get_mu()
+            sigma_b = state[0].get_sigma()
+            new_state = [[(GaussianState(mu=m_b, sigma=sigma_b), state[1]+1), self.prob_sample_success], [(GaussianState(mu=m_b, sigma=sigma_b), state[1]), 1-self.prob_sample_success]]
+            return new_state
+        
         elif action=="Down":
             I = self.v * np.array([0,-1])
         elif action=="Left":
@@ -97,17 +101,16 @@ class HybridRoverModel(object):
         elif action=="Up":
             I = self.v * np.array([0,1])
 
-        
+    
         m_b = state[0].get_mu()
         sigma_b = state[0].get_sigma()
 
         W = np.random.normal(0, self.sigma_w)
         V = np.random.normal(0, self.sigma_v)
 
-        term_in_L = (self.A.dot(self.P).dot(self.A.T) + self.Bw.dot(self.sigma_w).dot(np.eye(self.n)).dot(self.Bw.T))
-
-        L = term_in_L.dot(self.C.T).dot(self.C.dot(term_in_L).dot(self.C.T) +
-                                   self.Dv.dot(self.sigma_v).dot(np.eye(self.n)).dot(self.Dv.T)).I
+        term_in_L = (self.A.dot(self.P).dot(self.A.T) + self.Bw.dot(self.sigma_w).dot(np.eye(self.n)).dot(self.Bw.T)).dot(self.C.T)
+        term_in_L_2 = (self.C.dot(term_in_L).dot(self.C.T) +self.Dv.dot(self.sigma_v).dot(np.eye(self.n)).dot(self.Dv.T)).I
+        L = term_in_L.dot(term_in_L_2)
 
         new_P = (np.eye(self.n) - L.dot(self.C)).dot(term_in_L)
 
@@ -143,11 +146,15 @@ class HybridRoverModel(object):
         return risk
 
     def values(self,state,action):
-        return 1.0
+        if action=="Sample":
+            return 1.0
+        else:
+            return 1.0
 
     def heuristic(self, state):
         mu = state[0].get_mu()
-        return math.sqrt((float(mu[0])-self.goal_region.centroid.x)**2 + (float(mu[1])-self.goal_region.centroid.y)**2) + min(0, abs(state[1]-self.goal_num_sample))
+        heuristic_value = math.sqrt((float(mu[0])-self.goal_region.centroid.x)**2 + (float(mu[1])-self.goal_region.centroid.y)**2) + max(0, self.goal_num_sample-state[1])
+        return heuristic_value
 
     def execution_risk_heuristic(self, state):
         return 0
@@ -210,7 +217,7 @@ class GaussianState(object):
         return self.sigma
     
     def __eq__(x, y):
-        return isinstance(x, GraphElement) and isinstance(y, GraphElement) and (x.name == y.name)
+        return isinstance(x, GaussianState) and isinstance(y, GaussianState) and (x.mu == y.mu).all() and (x.sigma == y.sigma).all()
 
     def __ne__(self, other):
         return not self == other

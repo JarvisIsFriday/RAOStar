@@ -11,7 +11,7 @@ from belief import BeliefState
 
 class GRIDModel(object):
 
-    def __init__(self, size=(3,3), constraint_states = [(1,1)], prob_right_transition=0.9, prob_right_observation=0.9):
+    def __init__(self, size=(3,3), constraint_states = [(1,1)], prob_right_transition=0.9, prob_right_observation=0.9, DetermObs=False):
 
         # grid with size (x,y): width is x and height is y. index start from 0.
         # example of (3,3)
@@ -24,6 +24,8 @@ class GRIDModel(object):
         # |___|___|___|
         #
         # observation is the min(x-goal.x, y-goal.y).
+
+        self.DetermObs = DetermObs
 
         self.prob_right_transition = prob_right_transition
         self.prob_right_observation = prob_right_observation
@@ -95,25 +97,28 @@ class GRIDModel(object):
         return new_states
 
     def observations(self, state):
-
-        if (state[0]==0 and (state[1]==0 or state[1]==self.size[1]-1)) or (state[0]==self.size[0]-1 and (state[1]==0 or state[1]==self.size[1]-1)):
-            right_obs = 2
-
-        elif state[0]==0 or state[0]==self.size[0]-1 or state[1]==0 or state[1]==self.size[1]-1:
-            right_obs = 1
-
+        if self.DetermObs:
+            return [(state, 1.0)]
         else:
-            right_obs = 0
+            
+            if (state[0]==0 and (state[1]==0 or state[1]==self.size[1]-1)) or (state[0]==self.size[0]-1 and (state[1]==0 or state[1]==self.size[1]-1)):
+                right_obs = 2
 
-        obs_dist = []
+            elif state[0]==0 or state[0]==self.size[0]-1 or state[1]==0 or state[1]==self.size[1]-1:
+                right_obs = 1
 
-        for obs in self.obs_list:
-            if obs==right_obs:
-                obs_dist.append((obs, self.prob_right_observation))
             else:
-                obs_dist.append((obs, (1-self.prob_right_observation)/(len(self.obs_list)-1)))
+                right_obs = 0
 
-        return obs_dist
+            obs_dist = []
+
+            for obs in self.obs_list:
+                if obs==right_obs:
+                    obs_dist.append((obs, self.prob_right_observation))
+                else:
+                    obs_dist.append((obs, (1-self.prob_right_observation)/(len(self.obs_list)-1)))
+
+            return obs_dist
 
     # def observations(self, state):
     #     return [(state, 1.0)] # deterministic for now

@@ -161,7 +161,6 @@ class RAOStar(object):
         node.depth = depth
         node.set_prob(prob)
         node.set_likelihood(prob * parent_likelihood)
-        
         # Probability of violating constraints in a belief state. (never
         # change)
         if is_terminal_belief(b, self.term, self.terminal_prob):
@@ -214,14 +213,14 @@ class RAOStar(object):
         # self.debug(n.)
         # self.debug(queue)
 
-        self.graph.reset_likelihoods()
-        self.graph.root.likelihood = 1.0
+        # self.graph.reset_likelihoods()
+        # self.graph.root.likelihood = 1.0
 
         while len(queue) > 0:
             node = queue.popleft()
 
-            if node in expanded:
-                continue
+            # if node in expanded:
+            #     continue
 
             parent_l = node.likelihood
             self.debug('\n', node.state.state_print(),
@@ -235,17 +234,10 @@ class RAOStar(object):
                 self.debug("children risk bound", [
                            c.exec_risk_bound for c in children])
                 for n in children:
-                    transition = None
-                    for parent in self.graph.all_node_ancestors(n):
-                        if parent[0] == node and parent[1] == node.best_action:
-                            transition = parent[2]
-                            break
-                    print(n.state.state_print(), n.likelihood,
-                          parent_l, transition)
+                    # if n not in expanded:
+                    queue.append(n)
 
-                    n.likelihood = parent_l * transition
-                    if n not in expanded:
-                        queue.append(n)
+                        
             else:  # no best action has been assigned yet
                 self.debug('leaf node!')
                 self.leafnodes.add(node)
@@ -320,9 +312,9 @@ class RAOStar(object):
 
             if len(all_node_actions) > 0:
                 added_count = 0
+
                 for act in all_node_actions:
                     self.debug("\n", act)
-
                     child_obj_list, prob_list, prob_safe_list, new_child_idxs = self.obtain_child_objs_and_probs(belief, self.T, self.O, self.r, act)
 
                     # initializes the new child nodes
@@ -641,13 +633,15 @@ class RAOStar(object):
         # self.debug("===========================")
         queue = deque([self.graph.root])  # from root
         policy = {}
+        k=0
         while len(queue) > 0:
             node = queue.popleft()
             if node.best_action != None:
-                policy[node.name] = node.best_action.name
+                policy[(node.name,node.probability,node.depth)] = node.best_action.name
                 children = self.graph.hyperedges[node][node.best_action]
                 for c in children:
                     queue.append(c)
+                    k=k+1
         return policy
 
     def choose_node(self):
@@ -707,12 +701,12 @@ class RAOStar(object):
             child_blf_state = update_belief(pred_belief, state_to_obs, obs)
             candidate_child_obj = RAOStarGraphNode(
                 name=str(child_blf_state), value=None, state=BeliefState(child_blf_state))
-            if self.graph.has_node(candidate_child_obj):  # if node already present
-                child_obj = self.graph.nodes[candidate_child_obj.name]
-            else:
-                # the node initiated
-                child_obj = candidate_child_obj
-                new_child_idxs.append(count)
+            # if self.graph.has_node(candidate_child_obj):  # if node already present
+            #     child_obj = self.graph.nodes[candidate_child_obj.name]
+            # else:
+            #     # the node initiated
+            child_obj = candidate_child_obj
+            new_child_idxs.append(count)
             child_obj_list.append(child_obj)
             prob_list.append(obs_prob)
 

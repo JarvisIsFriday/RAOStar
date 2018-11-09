@@ -17,6 +17,9 @@ from collections import deque
 import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
 from shapely.geometry import *
+import matplotlib
+from matplotlib.collections import PatchCollection
+from descartes import *
 
 import numpy as np
 from scipy.interpolate import griddata
@@ -51,7 +54,7 @@ def plot_contour(x,y,z):
 
     return plt
 
-def extract_policy(graph):
+def extract_policy(graph,obstacles,goal_region):
     # extract policy mapping nodes to actions
     # self.debug("===========================")
     # self.debug("=== Extract Policy ========")
@@ -62,6 +65,8 @@ def extract_policy(graph):
     fig = plt.figure()
     ax = fig.add_subplot(111)
 
+    risk = 0
+    mu_total = np.array([[-999,-999]])
     while len(queue) > 0:
         node = queue.popleft()
         state = list(node.state.belief.keys())[0]
@@ -70,25 +75,57 @@ def extract_policy(graph):
         mu = np.squeeze(np.asarray(mu))
         sigma = np.squeeze(np.asarray(sigma))
 
+        
+        mu_current = np.array([[mu[0],mu[1]]])
+        mu_total = np.concatenate((mu_total,mu_current),axis=0)
+        size_before = np.size(mu_total,axis=0)
+        mu_total = np.unique(mu_total,axis=0)
+        size_after = np.size(mu_total,axis=0)
+
         # x = uniform(float(mu[0])-2, float(mu[0])+2, 200)
         # y = uniform(float(mu[1])-2, float(mu[1])+2, 200)
         # z = gauss(x, y, sigma[0:2,0:2], mu[0:2])
         # plt = plot_contour(x,y,z)
 
-        x, y = np.mgrid[float(mu[0])-0.5:float(mu[0])+0.5:.1, float(mu[1])-0.5:float(mu[1])+0.5:.1]
+        x, y = np.mgrid[float(mu[0])-1.5:float(mu[0])+1.5:.1, float(mu[1])-1.5:float(mu[1])+1.5:.1]
         pos = np.dstack((x, y))
-        print(mu[0:2])
-        rv = multivariate_normal(mu[0:2], sigma[0:2,0:2])
-        ax.contourf(x, y, rv.pdf(pos))
-        if node.best_action != None:
-            print(mu)
+        print("---------------")
+        if node.best_action!=None:
             print(node.best_action.name)
+        else:
+            print(node.best_action)
+            
+        print(mu[0:2])
+        print(state[1])
+        print(node.risk)
+        print(node.likelihood)
+        print("---------------")
+        rv = multivariate_normal(mu[0:2], sigma[0:2,0:2])
+        if size_after == size_before:
+            ax.contour(x, y, rv.pdf(pos))
+        risk = risk + node.risk
+        if node.best_action != None:
             policy[(node.name,node.probability,node.depth)] = node.best_action.name
             children = graph.hyperedges[node][node.best_action]
             for c in children:
                 queue.append(c)
                 k=k+1
 
+    print("risk: "+str(risk))
+
+    BLUE = '#0000ff'
+    RED = '#ff0000'
+    GREEN = '#008000'
+
+    obs = Polygon(obstacles)
+    obs_poly = PolygonPatch(obs, fc=RED, ec=RED, alpha=0.5, zorder=2)
+
+    goal = Polygon(goal_region)
+    goal_poly = PolygonPatch(goal, fc=GREEN, ec=GREEN, alpha=0.5, zorder=2)
+    ax.add_patch(obs_poly)
+    ax.add_patch(goal_poly)
+    ax.set_xlim([-1,12])
+    ax.set_ylim([-1,12])
     plt.show()
                 
     return policy
@@ -102,10 +139,15 @@ if __name__ == '__main__':
     if len(sys.argv) > 1:
         cc = float(sys.argv[1])
 
-       
-    model = HybridRoverModel(goal_region=Polygon([[8,8],[10,8],[10,10],[8,10]]), obstacle = np.array([[4,4],[3,5],[1,3],[2,3]]), goal_num_sample=3, prob_sample_success=0.95, DetermObs=True)
+    obstacles = np.array([[3,3],[4,3],[4,4],[3,4]])
+    # obstacles = np.array([[4,4],[3,5],[1,3],[2,3]])
 
-    algo = RAOStar(model, cc=cc, debugging=False, cc_type='o', fixed_horizon = 4, random_node_selection=False)
+    goal = Polygon([[8,8],[10,8],[10,10],[8,10]])
+    # goal = Polygon([[8,2],[10,2],[10,4],[8,4]])
+    
+    model = HybridRoverModel(goal_region=goal, obstacle = obstacles, goal_num_sample=3, prob_sample_success=0.95, DetermObs=True)
+
+    algo = RAOStar(model, cc=cc, debugging=False, cc_type='o', fixed_horizon = 13, random_node_selection=False)
     # algo = RAOStar(model, cc=cc, debugging=False, cc_type='o', fixed_horizon = 3, random_node_selection=False, time_limit=60*45)
 
     sigma_b0 = 0.01
@@ -119,7 +161,7 @@ if __name__ == '__main__':
 
     b_init = {(initial_gaussian_state, 0): 1.0}
     P, G = algo.search(b_init)
-    print(algo.graph.root.risk)
+    print(algo.graph.root.exec_risk)
     print(algo.graph.root.value)
 
     # print("Root risk : ",algo.graph.root.exec_risk)
@@ -127,6 +169,6 @@ if __name__ == '__main__':
 
     algo.extract_policy()
     print(P)
-    extract_policy(algo.graph)
+    extract_policy(algo.graph,obstacles,goal)
 
 
