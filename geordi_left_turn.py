@@ -10,6 +10,22 @@ from intention_vehicle_model import *
 from geordi_road_model import *
 from raostar import RAOStar
 from pprint import pprint
+import ast
+
+def prettyprint(policy):
+	for keys, values in policy.items():
+		state, probability, depth = keys
+		best_action = values
+
+		node_info = {}
+		node_info['state'] = state
+		node_info['probability'] = probability
+		node_info['depth'] = depth
+		node_info['the_best_action'] = best_action
+
+		# print(ast.literal_eval(state))
+
+		pprint(node_info)
 
 # assume an open road
 road_model = intersection_left_turn_ex()
@@ -44,7 +60,9 @@ algo = RAOStar(geordi_model, cc=0.1, debugging=False, cc_type='o', fixed_horizon
 
 b_init = {geordi_model.current_state: 1.0}
 P, G = algo.search(b_init)
-pprint(P)
+
+# print(P)
+prettyprint(P)
 
 # permutations = calculate_permutations(
 #     geordi_model, geordi_model.current_state, agent2_vehicle.action_list, 5)

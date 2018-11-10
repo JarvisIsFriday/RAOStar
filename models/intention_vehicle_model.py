@@ -1,12 +1,23 @@
 #!/usr/bin/env python
 
-# author: Matt Deyo
-# email: mdeyo@mit.edu
-# simple vehicle models based on MERS Toyota work for rao star
+# author: Cyrus Huang
+# email: huangxin@mit.edu
+# intention-aware vehicle models with probabilistic flow tubes
 
 import numpy as np
 import copy
+from pprint import pformat
+import pickle
 
+import sys
+import os
+workspace_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+pft_dir = os.path.join(workspace_dir,'PFT')
+sys.path.insert(0, os.path.join(workspace_dir, 'PFT'))
+
+# get pft modules and pft data
+import pft # need to get pft modules
+pft_data_dir = os.path.join(pft_dir,'pft_data')
 
 def calculate_permutations(model, state, actions, d):
     state_seq = [state]
@@ -76,8 +87,9 @@ class VehicleState(object):
         self.previous_action = previous_action
 
     def __repr__(self):
-        return self.name + ', state = ' + str(self.state)
-
+        info = {'name': self.name, 'state': self.state, 'pre-action':self.previous_action}
+        # return pformat(info)
+        return 'VehicleState(name: {}, state: {}, previous_action: {})'.format(self.name,str(self.state),self.previous_action)
 
 class MultiState(object):
     '''Object to store composite state of the world in Geordi Model. Has a
@@ -111,13 +123,15 @@ class MultiState(object):
         raise ValueError('MultiState does not have name: ' + str(name))
 
     def get_multistate_str(self):
-        return str(self.multi_state) + ' timestep:' + str(self.timestep)
+        extended_state = self.multi_state
+        extended_state['timestep'] = self.timestep
+        return str(extended_state)
 
     def print_multistate(self):
         print(self.get_multistate_str())
 
     def __repr__(self):
-        return self.get_multistate_str()
+        return 'MultiState({})'.format(self.get_multistate_str())
 
 
 class GeordiModel(object):
@@ -346,12 +360,53 @@ class GeordiModel(object):
 
     def state_risk(self, state):
         '''RAO* API - return 1.0 if multi-state breaks constraint'''
-        # TODO - some sort of crash function, if ego vehicle too close to other
-        # vehicles
+        # Compute risk as a probability of colliding with other vehicles
+        # using probabilistic flow tubes representing vehicle actions
 
-        return 0.0
-        if self.in_a_fire(state):
-            return 1.0
+        # get ego vehicle state
+        ego_state = [state.get_state('Ego').state['x'], state.get_state('Ego').state['y']]
+        ego_previous_action = state.get_state('Ego').previous_action
+        print(ego_state, ego_previous_action)
+
+        # compute collision probability with each agent vehicle
+        # assume all agent vehicles have names starting with 'Agent'
+        multi_state_keys = state.multi_state.keys()
+        agent_names = list(filter(lambda x:x.startswith(('Agent')), multi_state_keys))
+        p_collision = np.array([0]*len(agent_names))
+
+        for i, agent in enumerate(agent_names):
+            agent_state = [state.get_state(agent).state['x'], state.get_state(agent).state['y']]
+            agent_previous_action = state.get_state(agent).previous_action
+            print(agent, agent_state, agent_previous_action)
+
+            if ego_previous_action == 'ego_stop' or not ego_previous_action:
+                p_collision[i] = 0.0
+            else:
+                p_collision[i] = self.compute_pairwise_action_risk(ego_state,
+                                                                   ego_previous_action,
+                                                                   agent_state,
+                                                                   agent_previous_action)
+
+        # compute collision probability with any agent vehicle
+        risk = 1.0 - np.prod((1.0 - p_collision))
+        print('Risks: {}, final risk: {}'.format(p_collision, risk))
+        return risk
+
+    def compute_pairwise_action_risk(self, ego_state, ego_previous_action, agent_state, agent_previous_action):
+        # get ego and agent pfts
+        ego_pft_path = os.path.join(pft_data_dir, '%s_pft_short.pkl' % (ego_previous_action))
+        with open(ego_pft_path, 'rb') as f_snap:
+
+            ego_pft = pickle.load(f_snap)
+
+        agent_pft_path = os.path.join(pft_data_dir, '%s_pft_short.pkl' % (agent_previous_action))
+        with open(agent_pft_path, 'rb') as f_snap:
+            agent_pft = pickle.load(f_snap)
+
+        print('Ego info:', ego_state, ego_previous_action, ego_pft.l)
+        print('Agent info:', agent_state,agent_previous_action, agent_pft.l)
+        # print(1/0)
+
         return 0.0
 
     def values(self, state, action):
@@ -378,10 +433,6 @@ class GeordiModel(object):
     def costs(self, action):
         '''Return cost of given action, should call a cost function specific to ego vehicle model'''
         return action.cost
-        if action[2] == "up":
-            return 2  # bias against up action, models climbing above ice as harder
-        else:
-            return 1
 
 
 class VehicleModel(object):
@@ -433,7 +484,7 @@ class VehicleModel(object):
         return available_actions
 
     def __repr__(self):
-        return "VehicleModel: " + str(self.current_state)
+        return "VehicleModel({})".format(str(self.current_state))
 
 
 class ActionModel(object):
@@ -454,7 +505,7 @@ class ActionModel(object):
         self.length_of_action = duration
 
     def __repr__(self):
-        return "ActionModel: " + self.name
+        return 'ActionModel({})'.format(self.name)
 
     def set_precondition_function(self, func):
         if callable(func):
@@ -668,7 +719,7 @@ def merge_right_action(ego=False):
 
 def agent_forward_action(ego=False):
     length_of_action = 1
-    action_model = ActionModel("agent forward", 1, duration=length_of_action)
+    action_model = ActionModel("agent_forward", 1, duration=length_of_action)
 
     def preconditions(name, multi_state, model):
         if not isinstance(model, GeordiModel):
@@ -691,7 +742,7 @@ def agent_forward_action(ego=False):
 
 def agent_slow_down_action(ego=False):
     length_of_action = 1
-    action_model = ActionModel("agent slow down", 1, duration=length_of_action)
+    action_model = ActionModel("agent_slow_down", 1, duration=length_of_action)
 
     def preconditions(name, multi_state, model):
         if not isinstance(model, GeordiModel):
@@ -714,7 +765,7 @@ def agent_slow_down_action(ego=False):
 
 def turn_left_action(ego=False):
     length_of_action = 1
-    action_model = ActionModel("turn left", 0, duration=length_of_action)
+    action_model = ActionModel("ego_turn_left", 0, duration=length_of_action)
 
     def preconditions(name, multi_state, model):
         if not isinstance(model, GeordiModel):
@@ -739,7 +790,7 @@ def turn_left_action(ego=False):
 
 def stop_action(ego=False):
     length_of_action = 1
-    action_model = ActionModel("stop", 1, duration=length_of_action)
+    action_model = ActionModel("ego_stop", 1, duration=length_of_action)
 
     # no preconditions for stop action
     def preconditions(name, multi_state, model):
