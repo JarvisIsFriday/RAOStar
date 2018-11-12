@@ -56,7 +56,7 @@ new_states = geordi_model.state_transitions(
 
 print('new_states', new_states)
 
-algo = RAOStar(geordi_model, cc=0.5, debugging=False, cc_type='o', fixed_horizon = 3)
+algo = RAOStar(geordi_model, cc=0.01, debugging=False, cc_type='o', fixed_horizon = 3)
 
 b_init = {geordi_model.current_state: 1.0}
 P, G = algo.search(b_init)

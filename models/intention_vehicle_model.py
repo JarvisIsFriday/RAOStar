@@ -257,78 +257,19 @@ class GeordiModel(object):
 
             new_state_distribution = []
             for action in vehicle_model.get_available_actions(state, self):
+                # print(action, action.name, action.probability)
                 new_state = action.effects(state, self)
                 for combo in state_distribution:
                     new_combo = copy.deepcopy(combo)
                     new_combo['states'].append(new_state)
-                    new_combo['prob'] = new_combo['prob'] * 0.5
+                    print("------------------------------")
+                    print(new_state)
+                    new_combo['prob'] = new_combo['prob'] * action.probability
                     new_state_distribution.append(new_combo)
                 # print(new_state)
                 # print(new_state.previous_action)
 
             state_distribution = new_state_distribution
-
-            # If this is the first uncontrollable vehicle selected
-            # if i == 0:
-            #     new_state_distribution = []
-            #     # Start list of permutations with this and ego state
-            #     for action in vehicle_model.get_available_actions(state, self):
-            #         new_state = action.effects(state, self)
-            #         new_state_distribution.append(
-            #             [new_state, new_ego_vehicle_state])
-            #         print(new_state)
-            #         print(new_state.previous_action)
-            #     state_distribution = new_state_distribution
-            #
-            # else:
-            #     new_state_distribution = []
-            #     # Start list of permutations with this and ego state
-            #     for action in vehicle_model.get_available_actions(state, self):
-            #         new_state = action.effects(state, self)
-            #         for combo in state_distribution:
-            #             new_combo = combo.copy()
-            #             new_combo.append(new_state)
-            #             new_state_distribution.append(new_combo)
-            #         print(new_state)
-            #         print(new_state.previous_action)
-            #     state_distribution = new_state_distribution
-
-            # print(i)
-            # print('state_distribution', state_distribution)
-
-            # print(vehicle_name, self.vehicle_models[vehicle_name].get_available_actions(
-            # state, self))
-
-            # i += 1
-
-        # intended_new_state = (state[0] + action[0],
-        #                       state[1] + action[1])
-        # added depth to the state
-        # intended_new_state = (state[0] + action[0],
-        #                       state[1] + action[1], state[2] + 1)
-        # if not self.state_valid(intended_new_state):
-        #     return newstates
-        # if (state[0], state[1]) in self.icy_blocks and "right" in action:
-        #     # print('got right action!')
-        #     newstates.append([intended_new_state, self.icy_move_forward_prob])
-        #     for slip in [-1, 1]:
-        #         slipped = [(action[i] + slip) % 2 * slip for i in range(2)]
-        #         # slipped_state = (state[0] + slipped[0],
-        #         #                  state[1] + slipped[1])
-        #         # added depth to the state
-        #         slipped_state = (state[0] + slipped[0],
-        #                          state[1] + slipped[1], state[2] + 1)
-        #         if self.state_valid(slipped_state):
-        #             newstates.append(
-        #                 [slipped_state, (1 - self.icy_move_forward_prob) / 2])
-        # else:
-        #     newstates.append([intended_new_state, 1.0])
-
-        # Need to normalize probabilities for cases where slip only goes to one
-        # cell, not two possible cells
-        # sum_probs = sum(n for _, n in newstates)
-        # for child in newstates:
-            # child[1] = child[1] / sum_probs
 
         sum_probs = sum(c['prob'] for c in state_distribution)
 
@@ -577,13 +518,14 @@ class ActionModel(object):
         effect_function (func): Takes instance of geordi_model, to access road model and multi-state, returns next state for this vehicle after this action
     """
 
-    def __init__(self, name, action_cost=1, duration=1, precondition_check=lambda x: False, effect_function=lambda x: x):
+    def __init__(self, name, action_cost=1, duration=1, p=1.0, precondition_check=lambda x: False, effect_function=lambda x: x):
         self.name = name
         self.precondition_check = precondition_check
         self.effect_function = effect_function
         self.cost = action_cost
         self.agent_name = "unassigned"
         self.length_of_action = duration
+        self.probability = p
 
     def __repr__(self):
         return 'ActionModel({})'.format(self.name)
@@ -800,7 +742,8 @@ def merge_right_action(ego=False):
 
 def agent_forward_action(ego=False):
     length_of_action = 1
-    action_model = ActionModel("agent_forward", 1, duration=length_of_action)
+    action_probability = 1.0
+    action_model = ActionModel("agent_forward", 1, duration=length_of_action, p=action_probability)
 
     def preconditions(name, multi_state, model):
         if not isinstance(model, GeordiModel):
@@ -823,7 +766,8 @@ def agent_forward_action(ego=False):
 
 def agent_slow_down_action(ego=False):
     length_of_action = 1
-    action_model = ActionModel("agent_slow_down", 1, duration=length_of_action)
+    action_probability = 1.0
+    action_model = ActionModel("agent_slow_down", 1, duration=length_of_action, p=action_probability)
 
     def preconditions(name, multi_state, model):
         if not isinstance(model, GeordiModel):
