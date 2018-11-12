@@ -8,16 +8,17 @@ import numpy as np
 import copy
 from pprint import pformat
 import pickle
+import matplotlib.pyplot as plt
 
 import sys
 import os
-workspace_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-pft_dir = os.path.join(workspace_dir,'PFT')
-sys.path.insert(0, os.path.join(workspace_dir, 'PFT'))
+WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+PFT_DIR = os.path.join(WORKSPACE_DIR,'PFT')
+sys.path.insert(0, PFT_DIR)
 
 # get pft modules and pft data
 import pft # need to get pft modules
-pft_data_dir = os.path.join(pft_dir,'pft_data')
+PFT_DATA_DIR = os.path.join(PFT_DIR,'pft_data')
 
 def calculate_permutations(model, state, actions, d):
     state_seq = [state]
@@ -364,7 +365,9 @@ class GeordiModel(object):
         # using probabilistic flow tubes representing vehicle actions
 
         # get ego vehicle state
-        ego_state = [state.get_state('Ego').state['x'], state.get_state('Ego').state['y']]
+        ego_state = (state.get_state('Ego').state['x'], 
+                     state.get_state('Ego').state['y'],
+                     state.get_state('Ego').state['yaw']) 
         ego_previous_action = state.get_state('Ego').previous_action
         print(ego_state, ego_previous_action)
 
@@ -372,42 +375,116 @@ class GeordiModel(object):
         # assume all agent vehicles have names starting with 'Agent'
         multi_state_keys = state.multi_state.keys()
         agent_names = list(filter(lambda x:x.startswith(('Agent')), multi_state_keys))
-        p_collision = np.array([0]*len(agent_names))
+        p_collision = np.array([0.0]*len(agent_names))
 
         for i, agent in enumerate(agent_names):
-            agent_state = [state.get_state(agent).state['x'], state.get_state(agent).state['y']]
+            agent_state = (state.get_state(agent).state['x'], 
+                           state.get_state(agent).state['y'],
+                           state.get_state(agent).state['yaw'])
             agent_previous_action = state.get_state(agent).previous_action
             print(agent, agent_state, agent_previous_action)
 
             if ego_previous_action == 'ego_stop' or not ego_previous_action:
                 p_collision[i] = 0.0
             else:
-                p_collision[i] = self.compute_pairwise_action_risk(ego_state,
-                                                                   ego_previous_action,
-                                                                   agent_state,
-                                                                   agent_previous_action)
+                collision_result = self.compute_pairwise_action_risk(ego_state,
+                                                                     ego_previous_action,
+                                                                     agent_state,
+                                                                     agent_previous_action)
+                p_collision[i] = collision_result
+                print('check point', collision_result, p_collision)
 
         # compute collision probability with any agent vehicle
         risk = 1.0 - np.prod((1.0 - p_collision))
         print('Risks: {}, final risk: {}'.format(p_collision, risk))
         return risk
 
+    def load_pft(self, action_name):
+        pft_path = os.path.join(PFT_DATA_DIR, '%s_pft_short.pkl' % (action_name))
+        with open(pft_path, 'rb') as f_snap:
+            pft = pickle.load(f_snap)
+        return pft
+
     def compute_pairwise_action_risk(self, ego_state, ego_previous_action, agent_state, agent_previous_action):
+        verbose = False
+        visualize = False
+        safe_dist = 3
+        n_samples = 10
         # get ego and agent pfts
-        ego_pft_path = os.path.join(pft_data_dir, '%s_pft_short.pkl' % (ego_previous_action))
-        with open(ego_pft_path, 'rb') as f_snap:
-
-            ego_pft = pickle.load(f_snap)
-
-        agent_pft_path = os.path.join(pft_data_dir, '%s_pft_short.pkl' % (agent_previous_action))
-        with open(agent_pft_path, 'rb') as f_snap:
-            agent_pft = pickle.load(f_snap)
+        ego_pft = self.load_pft(ego_previous_action)
+        agent_pft = self.load_pft(agent_previous_action)
 
         print('Ego info:', ego_state, ego_previous_action, ego_pft.l)
         print('Agent info:', agent_state,agent_previous_action, agent_pft.l)
-        # print(1/0)
 
-        return 0.0
+        # assume pft's have equal lengths
+        assert ego_pft.l == agent_pft.l
+        ego_pft_mu = ego_pft.pos_mu
+        ego_pft_sigma = ego_pft.pos_sigma
+        agent_pft_mu = agent_pft.pos_mu
+        agent_pft_sigma = agent_pft.pos_sigma
+
+        # compute starting position of each vehicle given their actions
+        ego_start = (ego_state[0] - (ego_pft_mu[-1][0] - ego_pft_mu[0][0]), 
+                     ego_state[1] - (ego_pft_mu[-1][1] - ego_pft_mu[0][1]))
+        agent_start = (agent_state[0] - (agent_pft_mu[-1][0] - agent_pft_mu[0][0]), 
+                       agent_state[1] - (agent_pft_mu[-1][1] - agent_pft_mu[0][1]))
+
+        if visualize:
+            plt.plot(ego_state[0], ego_state[1], 'rx')
+            plt.plot(agent_state[0], agent_state[1], 'bx')
+            plt.plot(ego_start[0], ego_start[1], 'ro')
+            plt.plot(agent_start[0], agent_start[1], 'bo')
+
+        p_collision = np.array([0.0]*ego_pft.l)
+        for i in range(ego_pft.l):
+            # compute shifted positions
+            ego_mu = (ego_pft_mu[i][0] + ego_start[0],
+                      ego_pft_mu[i][1] + ego_start[1])
+            agent_mu = (agent_pft_mu[i][0] + agent_start[0],
+                        agent_pft_mu[i][1] + agent_start[1])
+            ego_sigma = ego_pft_sigma[i]
+            agent_sigma = agent_pft_sigma[i]
+
+            if visualize:
+                plt.plot(ego_mu[0],ego_mu[1],'r.')
+                plt.plot(agent_mu[0],agent_mu[1],'b.')
+
+            # compute distance between pairwise locations
+            dist = (ego_mu[0] - agent_mu[0]) ** 2 + (ego_mu[1] - agent_mu[1]) ** 2
+
+            if dist < safe_dist ** 2:
+                if verbose:
+                    print('Vehicle too close. Checking probability of collision...')
+                    print('Step {}, distance {:.2f}, ego_mu: {}, agent_mu: {}'.format(i, dist, ego_mu, agent_mu))
+
+                ego_pos = np.random.multivariate_normal(ego_mu, ego_sigma, n_samples)
+                agent_pos = np.random.multivariate_normal(agent_mu, agent_sigma, n_samples)
+                collision_cnt = 0
+
+                for p in range(n_samples):
+                    ego_p = ego_pos[p]
+
+                    for q in range(n_samples):
+                        agent_p = agent_pos[q]
+
+                    dist_pos = (ego_p[0] - agent_p[0]) ** 2 + (ego_p[1] - agent_p[1]) ** 2
+                    if dist_pos < safe_dist ** 2:
+                        if verbose:
+                            print('Collision found with ego pos {} and agent pos {}'.format(ego_p, agent_p))
+                        collision_cnt += 1
+
+                p_c = 1.0*collision_cnt/n_samples
+                p_collision[i] = p_c
+
+        if visualize:
+            plt.show()
+
+        result = np.max(p_collision)    
+        print('***Probability of collision:', result)
+        print()
+
+        return result
 
     def values(self, state, action):
         '''RAO* API - return value of a state (heuristic + cost)'''
@@ -422,9 +499,11 @@ class GeordiModel(object):
         # heuristic should be an underestimate,which the square of distance is
         # not if each action then cost 1 or 2
         ego_x = state.get_state('Ego').state['x']
-        print('heuristic', ego_x, 10 - ego_x)
-        return 10 - ego_x
-        return np.sqrt(sum([(self.goal[i] - state[i])**2 for i in range(2)]))
+        ego_y = state.get_state('Ego').state['y']
+
+        euclidean_dist = (ego_x - self.goal_state[0]) ** 2 + (ego_y - self.goal_state[1]) ** 2
+        print('heuristic', euclidean_dist)
+        return euclidean_dist
 
     def execution_risk_heuristic(self, state):
         ''' RAO* API - estimate of risk in multi-state, default 0 for admissible'''

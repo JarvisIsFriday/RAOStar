@@ -32,19 +32,19 @@ road_model = intersection_left_turn_ex()
 
 # add an ego vehicle that can choose from stop (wait) and turn
 ego_vehicle = VehicleModel('Ego', VehicleState(
-    state={'x': 88, 'y': 180}), isControllable=True)
+    state={'x': 88, 'y': 180, 'yaw': 90}), isControllable=True)
 ego_vehicle.add_action(stop_action(ego=True))
 ego_vehicle.add_action(turn_left_action(ego=True))
 
 # add an agent vehicle that can go forward or slow down
 agent1_vehicle = VehicleModel('Agent1', VehicleState(
-    state={'x': 92, 'y': 240}))
+    state={'x': 92, 'y': 240, 'yaw': 270}))
 agent1_vehicle.add_action(agent_forward_action())
 agent1_vehicle.add_action(agent_slow_down_action())
 
 # geordi_model = GeordiModel()
 geordi_model = GeordiModel(
-    [ego_vehicle, agent1_vehicle], road_model)
+    [ego_vehicle, agent1_vehicle], road_model, goal_state=(100,200))
 print(geordi_model.road_model)
 actions = geordi_model.get_available_actions(geordi_model.current_state)
 print(actions)
