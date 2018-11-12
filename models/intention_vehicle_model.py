@@ -408,7 +408,7 @@ class GeordiModel(object):
     def compute_pairwise_action_risk(self, ego_state, ego_previous_action, agent_state, agent_previous_action):
         verbose = False
         visualize = False
-        safe_dist = 3
+        safe_dist = 2
         n_samples = 10
         # get ego and agent pfts
         ego_pft = self.load_pft(ego_previous_action)
@@ -468,11 +468,13 @@ class GeordiModel(object):
                     for q in range(n_samples):
                         agent_p = agent_pos[q]
 
-                    dist_pos = (ego_p[0] - agent_p[0]) ** 2 + (ego_p[1] - agent_p[1]) ** 2
-                    if dist_pos < safe_dist ** 2:
-                        if verbose:
-                            print('Collision found with ego pos {} and agent pos {}'.format(ego_p, agent_p))
-                        collision_cnt += 1
+                        dist_pos = (ego_p[0] - agent_p[0]) ** 2 + (ego_p[1] - agent_p[1]) ** 2
+                        if dist_pos < safe_dist ** 2:
+                            if verbose:
+                                print('Collision found with ego pos {} and agent pos {}'.format(ego_p, agent_p))
+
+                            collision_cnt += 1
+                            break
 
                 p_c = 1.0*collision_cnt/n_samples
                 p_collision[i] = p_c
