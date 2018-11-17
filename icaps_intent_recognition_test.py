@@ -46,24 +46,35 @@ for m in maneuvers:
         pft = pickle.load(f_snap)
         pfts.append(pft)
 
-# sample 100 trajectories from each pft
+# # sample 100 trajectories from each pft
+# trajectories = {}
+# for i, pft in enumerate(pfts):
+#     pft_trajectories = []
+
+#     for _ in range(10):
+#         trajectory = []
+#         for idx in range(30):
+#             mu = pft.pos_mu[idx]
+#             sigma = pft.pos_sigma[idx]
+#             point = np.random.multivariate_normal(mu, sigma, 1)[0]
+#             trajectory.append(point)
+
+#         pft_trajectories.append(np.array(trajectory))
+
+#     trajectories[maneuvers[i]] = pft_trajectories
+
+
+# or read trajectories from human demonstrations
 trajectories = {}
-for i, pft in enumerate(pfts):
-    pft_trajectories = []
+for maneuver in maneuvers:
+    processed_data_path = os.path.join(PROCESSED_DATA_DIR, '%s_%s_raw.pkl' % (test, maneuver))
+    print(processed_data_path)
+    with open(processed_data_path, 'rb') as f_snap:
+        data = pickle.load(f_snap)
 
-    for _ in range(10):
-        trajectory = []
-        for idx in range(30):
-            mu = pft.pos_mu[idx]
-            sigma = pft.pos_sigma[idx]
-            point = np.random.multivariate_normal(mu, sigma, 1)[0]
-            trajectory.append(point)
+    trajectories[maneuver] = data
 
-        pft_trajectories.append(np.array(trajectory))
-
-    trajectories[maneuvers[i]] = pft_trajectories
-
-
+# print(trajectories)
 crashes = []
 times = []
 test_maneuvers = []
@@ -75,16 +86,19 @@ for i in range(1):
     m_idx = 1
     maneuver = maneuvers[m_idx]
     test_maneuvers.append(maneuver)
-    print(maneuver)
+    print(i, maneuver)
 
     trajs = trajectories[maneuver]
+    print(len(trajs))
 
-    traj = np.array(random.choice(trajs))
+    traj = np.array(trajs[12]) # 4
+
+    # traj = np.array(random.choice(trajs))
     print(traj.shape)
-    # traj = traj[::10,:]
+    traj = (traj.T)[::10,1:3]
 
-    # plt.plot(traj[:,0],traj[:,1],'rx')
-    # plt.show()
+    plt.plot(traj[:,0],traj[:,1],'rx')
+    plt.show()
 
     p_m = np.array([0.5, 0.5])
     crash = 0
@@ -96,12 +110,13 @@ for i in range(1):
         p_m_new = np.array([0.5, 0.5])
         for k, m in enumerate(maneuvers):
             pft = pfts[k]
+            # pft.pos_sigma = pft.pos_sigma*4
             best_index, likelihood, best_pos = pft.calculateMostLikelyPointPDF(obs)
             p_m_new[k] = likelihood
 
-        p_m[0] = p_m[0] * p_m_new[0]
-        p_m[1] = p_m[1] * p_m_new[1]
-        # p_m = p_m_new
+        # p_m[0] = p_m[0] * p_m_new[0]
+        # p_m[1] = p_m[1] * p_m_new[1]
+        p_m = p_m_new
         p_m = p_m/np.sum(p_m)
         print(p_m)
 
@@ -156,10 +171,10 @@ for i in range(1):
     # times.append((j+1)/30.0*4.8)
     # crashes.append(crash)
 
-crashes = np.array(crashes)
-times = np.array(times)
-print(np.sum(crashes)*1.0/len(crashes))
-print(np.mean(times))
+# crashes = np.array(crashes)
+# times = np.array(times)
+# print(np.sum(crashes)*1.0/len(crashes))
+# print(np.mean(times))
 # print(crashes)
 # print(test_maneuvers)
 # print(times)

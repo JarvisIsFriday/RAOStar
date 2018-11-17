@@ -135,7 +135,7 @@ class RAOStar(object):
                 else:
                     prev_root_val = root_value
         print('\n RAO* finished planning in ' +
-              "{0:.2f}".format(time.time() - self.start_time) + " seconds after " + str(count) + " iterations\n")
+              "{0:.4f}".format(time.time() - self.start_time) + " seconds after " + str(count) + " iterations\n")
         policy = self.extract_policy()
 
         return policy, self.graph

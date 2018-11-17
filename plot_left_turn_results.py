@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 delta = [99, 50, 10, 1, 0.1, 0.01]
+delta = np.array(delta)/100
 success = [53, 99, 100, 100, 100, 100]
 time = [1.184, 3.54, 3.66, 3.71, 3.84, 4.07]
 time = np.array(time) + 4.8

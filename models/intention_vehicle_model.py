@@ -801,7 +801,7 @@ def ego_forward_action(ego=False):
 
 def ego_merge_left_action(ego=False):
     length_of_action = 1
-    action_model = ActionModel("ego_merge_left", 0, duration=length_of_action)
+    action_model = ActionModel("ego_merge_left", 1, duration=length_of_action)
 
     def preconditions(name, multi_state, model):
         if not isinstance(model, GeordiModel):
@@ -831,7 +831,7 @@ def ego_merge_left_action(ego=False):
 
 def ego_merge_right_action(ego=False):
     length_of_action = 1
-    action_model = ActionModel("ego_merge_right", 0, duration=length_of_action)
+    action_model = ActionModel("ego_merge_right", 1, duration=length_of_action)
 
     def preconditions(name, multi_state, model):
         if not isinstance(model, GeordiModel):
