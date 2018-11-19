@@ -39,12 +39,12 @@ ego_vehicle.add_action(turn_left_action(ego=True))
 # add an agent vehicle that can go forward or slow down
 agent1_vehicle = VehicleModel('Agent1', VehicleState(
     state={'x': 92, 'y': 240, 'yaw': 270}))
-agent1_vehicle.add_action(agent_forward_action())
-agent1_vehicle.add_action(agent_slow_down_action())
+agent1_vehicle.add_action(agent_forward_action(action_probability=0.5))
+agent1_vehicle.add_action(agent_slow_down_action(action_probability=0.5))
 
 # geordi_model = GeordiModel()
 geordi_model = GeordiModel(
-    [ego_vehicle, agent1_vehicle], road_model, goal_state=(100,200))
+    [ego_vehicle, agent1_vehicle], road_model, goal_state={'x':100,'y':200})
 print(geordi_model.road_model)
 actions = geordi_model.get_available_actions(geordi_model.current_state)
 print(actions)
@@ -56,7 +56,7 @@ new_states = geordi_model.state_transitions(
 
 print('new_states', new_states)
 
-algo = RAOStar(geordi_model, cc=0.01, debugging=False, cc_type='o', fixed_horizon = 3)
+algo = RAOStar(geordi_model, cc=0.01, debugging=False, cc_type='o', fixed_horizon = 2)
 
 b_init = {geordi_model.current_state: 1.0}
 P, G = algo.search(b_init)

@@ -249,6 +249,7 @@ class GeordiModel(object):
         state_distribution = [{'prob': 1, 'states': [new_ego_vehicle_state]}]
 
         for vehicle_name, vehicle_model in self.vehicle_models.items():
+            # print("*****Name", vehicle_name)
             # print('each vehicle:', vehicle_name)
             # If selected vehicle is the controllable_vehicle
             if vehicle_model == self.controllable_vehicle:
@@ -257,19 +258,22 @@ class GeordiModel(object):
 
             new_state_distribution = []
             for action in vehicle_model.get_available_actions(state, self):
-                # print(action, action.name, action.probability)
+                # print("***Action",action, action.name, action.probability)
+                # print(state_distribution)
                 new_state = action.effects(state, self)
                 for combo in state_distribution:
                     new_combo = copy.deepcopy(combo)
                     new_combo['states'].append(new_state)
-                    print("------------------------------")
-                    print(new_state)
+                    # print("------------------------------")
+                    # print(new_state)
                     new_combo['prob'] = new_combo['prob'] * action.probability
                     new_state_distribution.append(new_combo)
                 # print(new_state)
                 # print(new_state.previous_action)
 
             state_distribution = new_state_distribution
+        # print(state_distribution)
+        # print("Number of states at next level", len(state_distribution))
 
         sum_probs = sum(c['prob'] for c in state_distribution)
 
@@ -284,8 +288,8 @@ class GeordiModel(object):
 
     def goal_function(self, state):
         if len(self.goal_state.keys()) == 2:
-            if state.get_state('Ego').state['x'] == self.goal_state[0] \
-               and state.get_state('Ego').state['y'] == self.goal_state[1]:
+            if state.get_state('Ego').state['x'] == self.goal_state['x'] \
+               and state.get_state('Ego').state['y'] == self.goal_state['y']:
                 return True
         else:
             if state.get_state('Ego').state['y'] == self.goal_state['y']:
@@ -315,7 +319,7 @@ class GeordiModel(object):
                      state.get_state('Ego').state['y'],
                      state.get_state('Ego').state['yaw']) 
         ego_previous_action = state.get_state('Ego').previous_action
-        print(ego_state, ego_previous_action)
+        # print(ego_state, ego_previous_action)
 
         # compute collision probability with each agent vehicle
         # assume all agent vehicles have names starting with 'Agent'
@@ -328,7 +332,7 @@ class GeordiModel(object):
                            state.get_state(agent).state['y'],
                            state.get_state(agent).state['yaw'])
             agent_previous_action = state.get_state(agent).previous_action
-            print(agent, agent_state, agent_previous_action)
+            # print(agent, agent_state, agent_previous_action)
 
             if ego_previous_action == 'ego_stop' or not ego_previous_action:
                 p_collision[i] = 0.0
@@ -338,11 +342,11 @@ class GeordiModel(object):
                                                                      agent_state,
                                                                      agent_previous_action)
                 p_collision[i] = collision_result
-                print('check point', collision_result, p_collision)
+                # print('check point', collision_result, p_collision)
 
         # compute collision probability with any agent vehicle
         risk = 1.0 - np.prod((1.0 - p_collision))
-        print('Risks: {}, final risk: {}'.format(p_collision, risk))
+        # print('Risks: {}, final risk: {}'.format(p_collision, risk))
         return risk
 
     def load_pft(self, action_name):
@@ -360,8 +364,8 @@ class GeordiModel(object):
         ego_pft = self.load_pft(ego_previous_action)
         agent_pft = self.load_pft(agent_previous_action)
 
-        print('Ego info:', ego_state, ego_previous_action, ego_pft.l)
-        print('Agent info:', agent_state,agent_previous_action, agent_pft.l)
+        # print('Ego info:', ego_state, ego_previous_action, ego_pft.l)
+        # print('Agent info:', agent_state,agent_previous_action, agent_pft.l)
 
         # assume pft's have equal lengths
         assert ego_pft.l == agent_pft.l, '{} - {}, {} - {}'.format(ego_previous_action, ego_pft.l, agent_previous_action, agent_pft.l)
@@ -429,8 +433,8 @@ class GeordiModel(object):
             plt.show()
 
         result = np.max(p_collision)    
-        print('***Probability of collision:', result)
-        print()
+        # print('***Probability of collision:', result)
+        # print()
 
         return result
 
@@ -454,7 +458,7 @@ class GeordiModel(object):
         else:
             euclidean_dist = (ego_y - self.goal_state['y']) ** 2
 
-        print('heuristic', euclidean_dist)
+        # print('heuristic', euclidean_dist)
         return euclidean_dist
 
     def execution_risk_heuristic(self, state):

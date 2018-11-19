@@ -45,16 +45,16 @@ agent1_vehicle.add_action(agent_merge_right_action(0.1))
 agent1_vehicle.add_action(agent_slow_forward_action(1.0))
 
 agent2_vehicle = VehicleModel('Agent2', VehicleState(
-    state={'x': -74.7, 'y': -60, 'yaw': 0, 'lane_num':3}))
+    state={'x': -74.7, 'y': -60, 'yaw': 0, 'lane_num':1}))
 agent2_vehicle.add_action(agent_merge_left_action(0.1))
 agent2_vehicle.add_action(agent_merge_right_action(0.1))
 agent2_vehicle.add_action(agent_slow_forward_action(1.0))
 
-# agent3_vehicle = VehicleModel('Agent3', VehicleState(
-#     state={'x': -74.7, 'y': -20, 'yaw': 0, 'lane_num':1}))
-# agent3_vehicle.add_action(agent_merge_left_action(0.1))
-# agent3_vehicle.add_action(agent_merge_right_action(0.1))
-# agent3_vehicle.add_action(agent_slow_forward_action(1.0))
+agent3_vehicle = VehicleModel('Agent3', VehicleState(
+    state={'x': -77.7, 'y': 0, 'yaw': 0, 'lane_num':3}))
+agent3_vehicle.add_action(agent_merge_left_action(1.0))
+agent3_vehicle.add_action(agent_merge_right_action(1.0))
+agent3_vehicle.add_action(agent_slow_forward_action(1.0))
 
 # agent4_vehicle = VehicleModel('Agent4', VehicleState(
 #     state={'x': -74.7, 'y': -20, 'yaw': 0, 'lane_num':1}))
@@ -70,7 +70,7 @@ agent2_vehicle.add_action(agent_slow_forward_action(1.0))
 
 # geordi_model = GeordiModel()
 geordi_model = GeordiModel(
-    [ego_vehicle, agent1_vehicle, agent2_vehicle], road_model, goal_state={'y':-90})
+    [ego_vehicle, agent1_vehicle, agent2_vehicle], road_model, goal_state={'y':-150})
 print(geordi_model.road_model)
 actions = geordi_model.get_available_actions(geordi_model.current_state)
 print(actions)
@@ -82,13 +82,13 @@ new_states = geordi_model.state_transitions(
 
 print('new_states', new_states)
 
-algo = RAOStar(geordi_model, cc=0.1, debugging=False, cc_type='o', fixed_horizon = 1)
+algo = RAOStar(geordi_model, cc=0.1, debugging=False, cc_type='o', fixed_horizon = 2)
 
 b_init = {geordi_model.current_state: 1.0}
 P, G = algo.search(b_init)
 
 # print(P)
-prettyprint(P)
+# prettyprint(P)
 
 # permutations = calculate_permutations(
 #     geordi_model, geordi_model.current_state, agent2_vehicle.action_list, 5)

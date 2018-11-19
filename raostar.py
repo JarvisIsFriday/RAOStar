@@ -467,11 +467,11 @@ class RAOStar(object):
                             exec_risk_for_best = exec_risk
                 # Test if some action has been selected
                 if best_action_idx >= 0:
-                    if (not np.isclose(best_Q, current_Q)) and self.is_better(best_Q, current_Q):
-                        print('current_Q', current_Q, 'best_Q', best_Q)
+                    # if (not np.isclose(best_Q, current_Q)) and self.is_better(best_Q, current_Q):
+                    #     print('current_Q', current_Q, 'best_Q', best_Q)
 
-                        print(
-                            'WARNING: node Q value improved, which might indicate inadmissibility.')
+                    #     print(
+                    #         'WARNING: node Q value improved, which might indicate inadmissibility.')
 
 
                     # propagate execution risk bound down to all descendants (added by Sungkwoen)
