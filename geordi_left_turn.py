@@ -10,6 +10,7 @@ from intention_vehicle_model import *
 from geordi_road_model import *
 from raostar import RAOStar
 from pprint import pprint
+
 import ast
 
 def prettyprint(policy):
@@ -38,9 +39,9 @@ ego_vehicle.add_action(turn_left_action(ego=True))
 
 # add an agent vehicle that can go forward or slow down
 agent1_vehicle = VehicleModel('Agent1', VehicleState(
-    state={'x': 92, 'y': 240, 'yaw': 270}))
-agent1_vehicle.add_action(agent_forward_action(action_probability=0.5))
-agent1_vehicle.add_action(agent_slow_down_action(action_probability=0.5))
+    state={'x': 92, 'y': 250, 'yaw': 270}))
+agent1_vehicle.add_action(agent_forward_action(action_probability=0.5, index=0))
+agent1_vehicle.add_action(agent_slow_down_action(action_probability=0.5, index=0))
 
 # geordi_model = GeordiModel()
 geordi_model = GeordiModel(

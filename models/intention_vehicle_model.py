@@ -332,17 +332,27 @@ class GeordiModel(object):
                            state.get_state(agent).state['y'],
                            state.get_state(agent).state['yaw'])
             agent_previous_action = state.get_state(agent).previous_action
-            # print(agent, agent_state, agent_previous_action)
 
             if ego_previous_action == 'ego_stop' or not ego_previous_action:
                 p_collision[i] = 0.0
-            else:
-                collision_result = self.compute_pairwise_action_risk(ego_state,
-                                                                     ego_previous_action,
-                                                                     agent_state,
-                                                                     agent_previous_action)
-                p_collision[i] = collision_result
-                # print('check point', collision_result, p_collision)
+                continue
+
+            # get clock for previous action
+            actions = self.get_vehicle_model(agent).action_list
+            agent_index = 0
+            for action in actions:
+                if action.name == agent_previous_action:
+                    agent_index = action.index - 1
+
+            collision_result = self.compute_pairwise_action_risk(ego_state,
+                                                                 # ego_index, # TODO: change
+                                                                 0,
+                                                                 ego_previous_action,
+                                                                 agent_state,
+                                                                 agent_index,
+                                                                 agent_previous_action)
+            p_collision[i] = collision_result
+            # print('check point', collision_result, p_collision)
 
         # compute collision probability with any agent vehicle
         risk = 1.0 - np.prod((1.0 - p_collision))
@@ -350,12 +360,13 @@ class GeordiModel(object):
         return risk
 
     def load_pft(self, action_name):
+        action_name = ''.join([i for i in action_name if not i.isdigit()])
         pft_path = os.path.join(PFT_DATA_DIR, '%s_pft_short.pkl' % (action_name))
         with open(pft_path, 'rb') as f_snap:
             pft = pickle.load(f_snap)
         return pft
 
-    def compute_pairwise_action_risk(self, ego_state, ego_previous_action, agent_state, agent_previous_action):
+    def compute_pairwise_action_risk(self, ego_state, ego_index, ego_previous_action, agent_state, agent_index, agent_previous_action):
         verbose = False
         visualize = False
         safe_dist = 2
@@ -375,10 +386,10 @@ class GeordiModel(object):
         agent_pft_sigma = agent_pft.pos_sigma
 
         # compute starting position of each vehicle given their actions
-        ego_start = (ego_state[0] - (ego_pft_mu[-1][0] - ego_pft_mu[0][0]), 
-                     ego_state[1] - (ego_pft_mu[-1][1] - ego_pft_mu[0][1]))
-        agent_start = (agent_state[0] - (agent_pft_mu[-1][0] - agent_pft_mu[0][0]), 
-                       agent_state[1] - (agent_pft_mu[-1][1] - agent_pft_mu[0][1]))
+        ego_start = (ego_state[0] - (ego_pft_mu[-1][0] - ego_pft_mu[ego_index][0]),
+                     ego_state[1] - (ego_pft_mu[-1][1] - ego_pft_mu[ego_index][1]))
+        agent_start = (agent_state[0] - (agent_pft_mu[-1][0] - agent_pft_mu[agent_index][0]),
+                       agent_state[1] - (agent_pft_mu[-1][1] - agent_pft_mu[agent_index][1]))
 
         if visualize:
             plt.plot(ego_state[0], ego_state[1], 'rx')
@@ -389,12 +400,19 @@ class GeordiModel(object):
         p_collision = np.array([0.0]*ego_pft.l)
         for i in range(ego_pft.l):
             # compute shifted positions
-            ego_mu = (ego_pft_mu[i][0] + ego_start[0],
-                      ego_pft_mu[i][1] + ego_start[1])
-            agent_mu = (agent_pft_mu[i][0] + agent_start[0],
-                        agent_pft_mu[i][1] + agent_start[1])
-            ego_sigma = ego_pft_sigma[i]
-            agent_sigma = agent_pft_sigma[i]
+            if i + ego_index < ego_pft.l:
+                ego_mu = (ego_pft_mu[i + ego_index][0] + ego_start[0],
+                          ego_pft_mu[i + ego_index][1] + ego_start[1])
+                ego_sigma = ego_pft_sigma[i + ego_index]
+            else:
+                continue
+
+            if i + agent_index < agent_pft.l:
+                agent_mu = (agent_pft_mu[i + agent_index][0] + agent_start[0],
+                            agent_pft_mu[i + agent_index][1] + agent_start[1])
+                agent_sigma = agent_pft_sigma[i + agent_index]
+            else:
+                continue
 
             if visualize:
                 plt.plot(ego_mu[0],ego_mu[1],'r.')
@@ -531,7 +549,7 @@ class ActionModel(object):
         effect_function (func): Takes instance of geordi_model, to access road model and multi-state, returns next state for this vehicle after this action
     """
 
-    def __init__(self, name, action_cost=1, duration=1, p=1.0, precondition_check=lambda x: False, effect_function=lambda x: x):
+    def __init__(self, name, action_cost=1, duration=1, p=1.0, i=0, precondition_check=lambda x: False, effect_function=lambda x: x):
         self.name = name
         self.precondition_check = precondition_check
         self.effect_function = effect_function
@@ -539,6 +557,7 @@ class ActionModel(object):
         self.agent_name = "unassigned"
         self.length_of_action = duration
         self.probability = p
+        self.index = i
 
     def __repr__(self):
         return 'ActionModel({})'.format(self.name)
@@ -952,9 +971,9 @@ def agent_merge_right_action(action_probability, ego=False):
 #################################
 
 
-def agent_forward_action(action_probability, ego=False):
+def agent_forward_action(action_probability, index, ego=False):
     length_of_action = 1
-    action_model = ActionModel("agent_forward", 1, duration=length_of_action, p=action_probability)
+    action_model = ActionModel("agent_forward"+str(index), 1, duration=length_of_action, p=action_probability, i=index)
 
     def preconditions(name, multi_state, model):
         if not isinstance(model, GeordiModel):
@@ -975,9 +994,9 @@ def agent_forward_action(action_probability, ego=False):
     action_model.set_effect_function(effects)
     return action_model
 
-def agent_slow_down_action(action_probability, ego=False):
+def agent_slow_down_action(action_probability, index, ego=False):
     length_of_action = 1
-    action_model = ActionModel("agent_slow_down", 1, duration=length_of_action, p=action_probability)
+    action_model = ActionModel("agent_slow_down"+str(index), 1, duration=length_of_action, p=action_probability, i=index)
 
     def preconditions(name, multi_state, model):
         if not isinstance(model, GeordiModel):
