@@ -93,6 +93,8 @@ class RAOStar(object):
 
     def search_termination(self, count, iter_limit, time_limit):
 
+        # print(count, self.likelihood_termination, self.end_search_on_likelihood, len(self.opennodes))
+
         if self.likelihood_termination <= self.cc and self.end_search_on_likelihood:
             return True
 

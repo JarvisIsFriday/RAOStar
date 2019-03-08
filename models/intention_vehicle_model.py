@@ -257,7 +257,16 @@ class GeordiModel(object):
                 continue
 
             new_state_distribution = []
-            for action in vehicle_model.get_available_actions(state, self):
+
+            available_actions = vehicle_model.get_available_actions(state, self)
+            # assume next action is always going forward
+            if state.timestep >= 1:
+                for action in available_actions:
+                    if action.name == 'forward':
+                        available_actions = [action]
+                        break
+
+            for action in available_actions:
                 # print("***Action",action, action.name, action.probability)
                 # print(state_distribution)
                 new_state = action.effects(state, self)
@@ -287,12 +296,17 @@ class GeordiModel(object):
         return new_states
 
     def goal_function(self, state):
-        if len(self.goal_state.keys()) == 2:
+        goal_state_keys = list(self.goal_state.keys())
+
+        if 'x' in goal_state_keys and 'y' in goal_state_keys:
             if state.get_state('Ego').state['x'] == self.goal_state['x'] \
                and state.get_state('Ego').state['y'] == self.goal_state['y']:
                 return True
-        else:
+        elif 'y' in goal_state_keys:
             if state.get_state('Ego').state['y'] == self.goal_state['y']:
+                return True
+        elif 'x' in goal_state_keys:
+            if state.get_state('Ego').state['x'] >= self.goal_state['x']:
                 return True
 
 
@@ -342,7 +356,8 @@ class GeordiModel(object):
             agent_index = 0
             for action in actions:
                 if action.name == agent_previous_action:
-                    agent_index = action.index - 1
+                    # agent_index = action.index
+                    agent_index = action.index
 
             collision_result = self.compute_pairwise_action_risk(ego_state,
                                                                  # ego_index, # TODO: change
@@ -364,6 +379,7 @@ class GeordiModel(object):
         pft_path = os.path.join(PFT_DATA_DIR, '%s_pft_short.pkl' % (action_name))
         with open(pft_path, 'rb') as f_snap:
             pft = pickle.load(f_snap)
+            # print(action_name, pft.pos_mu)
         return pft
 
     def compute_pairwise_action_risk(self, ego_state, ego_index, ego_previous_action, agent_state, agent_index, agent_previous_action):
@@ -385,11 +401,20 @@ class GeordiModel(object):
         agent_pft_mu = agent_pft.pos_mu
         agent_pft_sigma = agent_pft.pos_sigma
 
+        # a quick hack
+        # TODO: fix this
+        if agent_index >= len(agent_pft_mu):
+            agent_index = len(agent_pft_mu) - 1
+
         # compute starting position of each vehicle given their actions
         ego_start = (ego_state[0] - (ego_pft_mu[-1][0] - ego_pft_mu[ego_index][0]),
                      ego_state[1] - (ego_pft_mu[-1][1] - ego_pft_mu[ego_index][1]))
         agent_start = (agent_state[0] - (agent_pft_mu[-1][0] - agent_pft_mu[agent_index][0]),
                        agent_state[1] - (agent_pft_mu[-1][1] - agent_pft_mu[agent_index][1]))
+
+
+        # print('ego:', ego_start, ego_state)
+        # print('agent:', agent_start, agent_state, agent_index)
 
         if visualize:
             plt.plot(ego_state[0], ego_state[1], 'rx')
@@ -471,10 +496,17 @@ class GeordiModel(object):
         ego_x = state.get_state('Ego').state['x']
         ego_y = state.get_state('Ego').state['y']
 
-        if len(self.goal_state.keys()) == 2:
+        goal_state_keys = list(self.goal_state.keys())
+
+        if 'x' in goal_state_keys and 'y' in goal_state_keys:
             euclidean_dist = (ego_x - self.goal_state['x']) ** 2 + (ego_y - self.goal_state['y']) ** 2
-        else:
+        elif 'y' in goal_state_keys:
             euclidean_dist = (ego_y - self.goal_state['y']) ** 2
+        elif 'x' in goal_state_keys:
+            euclidean_dist = (ego_x - self.goal_state['x']) ** 2
+        else:
+            assert True, 'goal state is not well defined'
+            
 
         # print('heuristic', euclidean_dist)
         return euclidean_dist
@@ -792,50 +824,22 @@ def ego_forward_action(ego=False):
             raise TypeError("input must be a GeordiModel")
         this_state = multi_state.get_state(name).state
         new_state = this_state.copy()
-        new_state['y'] = this_state['y'] - 30
+        new_state['x'] = this_state['x'] + 30
         return VehicleState(state=new_state, name=name, previous_action=action_model.name)
 
     action_model.set_precondition_function(preconditions)
     action_model.set_effect_function(effects)
     return action_model
 
-# def ego_slow_forward_action(ego=False):
-#     length_of_action = 1
-#     action_model = ActionModel("ego_slow_forward", 0, duration=length_of_action)
-
-#     def preconditions(name, multi_state, model):
-#         if not isinstance(model, GeordiModel):
-#             raise TypeError("input must be a GeordiModel")
-
-#         # no preconditions
-#         return True
-
-#     def effects(name, multi_state, model):
-#         if not isinstance(model, GeordiModel):
-#             raise TypeError("input must be a GeordiModel")
-#         this_state = multi_state.get_state(name).state
-#         new_state = this_state.copy()
-#         new_state['x'] = this_state['x'] - 20
-#         return VehicleState(state=new_state, name=name, previous_action=action_model.name)
-
-#     action_model.set_precondition_function(preconditions)
-#     action_model.set_effect_function(effects)
-#     return action_model
-
-def ego_merge_left_action(ego=False):
+def ego_slow_forward_action(ego=False):
     length_of_action = 1
-    action_model = ActionModel("ego_merge_left", 1, duration=length_of_action)
+    action_model = ActionModel("ego_slow_forward", 2, duration=length_of_action)
 
     def preconditions(name, multi_state, model):
         if not isinstance(model, GeordiModel):
             raise TypeError("input must be a GeordiModel")
 
-        # vehicle whose action is being considered for validity
-        this_state = multi_state.get_state(name).state
-
-        if this_state['lane_num'] != 1:
-            return False
-
+        # no preconditions
         return True
 
     def effects(name, multi_state, model):
@@ -843,9 +847,7 @@ def ego_merge_left_action(ego=False):
             raise TypeError("input must be a GeordiModel")
         this_state = multi_state.get_state(name).state
         new_state = this_state.copy()
-        new_state['y'] = this_state['y'] - 30
-        new_state['x'] = this_state['x'] - 3
-        new_state['lane_num'] = 3
+        new_state['x'] = this_state['x'] + 20
         return VehicleState(state=new_state, name=name, previous_action=action_model.name)
 
     action_model.set_precondition_function(preconditions)
@@ -863,6 +865,37 @@ def ego_merge_right_action(ego=False):
         # vehicle whose action is being considered for validity
         this_state = multi_state.get_state(name).state
 
+        if this_state['lane_num'] != 1:
+            return False
+
+        return True
+
+    def effects(name, multi_state, model):
+        if not isinstance(model, GeordiModel):
+            raise TypeError("input must be a GeordiModel")
+        this_state = multi_state.get_state(name).state
+        new_state = this_state.copy()
+        new_state['y'] = this_state['y'] + 3
+        new_state['x'] = this_state['x'] + 30
+        new_state['lane_num'] = 3
+        return VehicleState(state=new_state, name=name, previous_action=action_model.name)
+
+    action_model.set_precondition_function(preconditions)
+    action_model.set_effect_function(effects)
+    return action_model
+
+def ego_merge_left_action(ego=False):
+    length_of_action = 1
+    action_model = ActionModel("ego_merge_left", 1, duration=length_of_action)
+
+    def preconditions(name, multi_state, model):
+        if not isinstance(model, GeordiModel):
+            raise TypeError("input must be a GeordiModel")
+
+        # vehicle whose action is being considered for validity
+        this_state = multi_state.get_state(name).state
+        # print('((((((((((((((((((((((', this_state)
+
         if this_state['lane_num'] != 3:
             return False
 
@@ -873,8 +906,8 @@ def ego_merge_right_action(ego=False):
             raise TypeError("input must be a GeordiModel")
         this_state = multi_state.get_state(name).state
         new_state = this_state.copy()
-        new_state['y'] = this_state['y'] - 30
-        new_state['x'] = this_state['x'] + 3
+        new_state['y'] = this_state['y'] - 3
+        new_state['x'] = this_state['x'] + 30
         new_state['lane_num'] = 1
         return VehicleState(state=new_state, name=name, previous_action=action_model.name)
 
@@ -882,9 +915,9 @@ def ego_merge_right_action(ego=False):
     action_model.set_effect_function(effects)
     return action_model
 
-def agent_slow_forward_action(action_probability, ego=False):
+def agent_slow_forward_action(action_probability, index, ego=False):
     length_of_action = 1
-    action_model = ActionModel("agent_slow_forward", 1, duration=length_of_action, p=action_probability)
+    action_model = ActionModel("agent_slow_forward"+str(index), 1, duration=length_of_action, p=action_probability, i=index)
 
     def preconditions(name, multi_state, model):
         if not isinstance(model, GeordiModel):
@@ -898,16 +931,16 @@ def agent_slow_forward_action(action_probability, ego=False):
             raise TypeError("input must be a GeordiModel")
         this_state = multi_state.get_state(name).state
         new_state = this_state.copy()
-        new_state['y'] = this_state['y'] - 20
+        new_state['x'] = this_state['x'] + 20
         return VehicleState(state=new_state, name=name, previous_action=action_model.name)
 
     action_model.set_precondition_function(preconditions)
     action_model.set_effect_function(effects)
     return action_model
 
-def agent_merge_left_action(action_probability, ego=False):
+def agent_merge_right_action(action_probability, index, ego=False):
     length_of_action = 1
-    action_model = ActionModel("agent_merge_left", 1, duration=length_of_action, p=action_probability)
+    action_model = ActionModel("agent_merge_right"+str(index), 1, duration=length_of_action, p=action_probability, i=index)
 
     def preconditions(name, multi_state, model):
         if not isinstance(model, GeordiModel):
@@ -916,8 +949,8 @@ def agent_merge_left_action(action_probability, ego=False):
         # vehicle whose action is being considered for validity
         this_state = multi_state.get_state(name).state
 
-        if this_state['lane_num'] != 1:
-            return False
+        # if this_state['lane_num'] != 1:
+        #     return False
 
         return True
 
@@ -926,18 +959,18 @@ def agent_merge_left_action(action_probability, ego=False):
             raise TypeError("input must be a GeordiModel")
         this_state = multi_state.get_state(name).state
         new_state = this_state.copy()
-        new_state['y'] = this_state['y'] - 20
-        new_state['x'] = this_state['x'] - 3
-        new_state['lane_num'] = 3
+        new_state['y'] = this_state['y'] + 3
+        new_state['x'] = this_state['x'] + 20
+        # new_state['lane_num'] = 3
         return VehicleState(state=new_state, name=name, previous_action=action_model.name)
 
     action_model.set_precondition_function(preconditions)
     action_model.set_effect_function(effects)
     return action_model
 
-def agent_merge_right_action(action_probability, ego=False):
+def agent_merge_left_action(action_probability, index, ego=False):
     length_of_action = 1
-    action_model = ActionModel("agent_merge_right", 1, duration=length_of_action, p=action_probability)
+    action_model = ActionModel("agent_merge_left"+str(index), 1, duration=length_of_action, p=action_probability, i=index)
 
     def preconditions(name, multi_state, model):
         if not isinstance(model, GeordiModel):
@@ -946,8 +979,8 @@ def agent_merge_right_action(action_probability, ego=False):
         # vehicle whose action is being considered for validity
         this_state = multi_state.get_state(name).state
 
-        if this_state['lane_num'] != 3:
-            return False
+        # if this_state['lane_num'] != 3:
+        #     return False
 
         return True
 
@@ -956,9 +989,9 @@ def agent_merge_right_action(action_probability, ego=False):
             raise TypeError("input must be a GeordiModel")
         this_state = multi_state.get_state(name).state
         new_state = this_state.copy()
-        new_state['y'] = this_state['y'] - 20
-        new_state['x'] = this_state['x'] + 3
-        new_state['lane_num'] = 1
+        new_state['y'] = this_state['y'] - 3
+        new_state['x'] = this_state['x'] + 20
+        # new_state['lane_num'] = 1
         return VehicleState(state=new_state, name=name, previous_action=action_model.name)
 
     action_model.set_precondition_function(preconditions)

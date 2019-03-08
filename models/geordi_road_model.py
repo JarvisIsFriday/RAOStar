@@ -207,6 +207,23 @@ def highway_2_lanes_offramp_ex():
 
     return new_road
 
+def highway_2_lanes():
+    '''Example showing how to create an explicit cc-MDP with the new model format.
+      ----------------------
+      lane-1
+      ----------------------
+      lane-2
+      ----------------------'''
+
+    new_road = RoadModel(200)
+    new_road.add_road_lane(0, "wall-inner", (0, 0), True)
+    new_road.add_road_lane(1, "lane-1", (0, 200))
+    new_road.add_road_lane(2, "line-1-2", (0, 200), True)
+    new_road.add_road_lane(3, "lane-2", (0, 200))
+    new_road.add_road_lane(4, "wall-outer", (0, 200), True)
+
+    return new_road
+
 def intersection_left_turn_ex():
     new_road = RoadModel(200)
     new_road.add_road_lane(0, "wall-inner", (0, 0), True)
