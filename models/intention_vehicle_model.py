@@ -386,7 +386,7 @@ class GeordiModel(object):
         verbose = False
         visualize = False
         safe_dist = 2
-        n_samples = 100
+        n_samples = 20
         # get ego and agent pfts
         ego_pft = self.load_pft(ego_previous_action)
         agent_pft = self.load_pft(agent_previous_action)
