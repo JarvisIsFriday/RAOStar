@@ -333,7 +333,6 @@ class GeordiModel(object):
                      state.get_state('Ego').state['y'],
                      state.get_state('Ego').state['yaw']) 
         ego_previous_action = state.get_state('Ego').previous_action
-        # print(ego_state, ego_previous_action)
 
         # compute collision probability with each agent vehicle
         # assume all agent vehicles have names starting with 'Agent'
@@ -347,6 +346,7 @@ class GeordiModel(object):
                            state.get_state(agent).state['yaw'])
             agent_previous_action = state.get_state(agent).previous_action
 
+            # assume no risk if ego vehicle stops
             if ego_previous_action == 'ego_stop' or not ego_previous_action:
                 p_collision[i] = 0.0
                 continue
@@ -356,18 +356,17 @@ class GeordiModel(object):
             agent_index = 0
             for action in actions:
                 if action.name == agent_previous_action:
-                    # agent_index = action.index
                     agent_index = action.index
 
+            # compute collision probability between two vehicles given their actions
             collision_result = self.compute_pairwise_action_risk(ego_state,
-                                                                 # ego_index, # TODO: change
+                                                                 # ego_index,
                                                                  0,
                                                                  ego_previous_action,
                                                                  agent_state,
                                                                  agent_index,
                                                                  agent_previous_action)
             p_collision[i] = collision_result
-            # print('check point', collision_result, p_collision)
 
         # compute collision probability with any agent vehicle
         risk = 1.0 - np.prod((1.0 - p_collision))
@@ -379,7 +378,6 @@ class GeordiModel(object):
         pft_path = os.path.join(PFT_DATA_DIR, '%s_pft_short.pkl' % (action_name))
         with open(pft_path, 'rb') as f_snap:
             pft = pickle.load(f_snap)
-            # print(action_name, pft.pos_mu)
         return pft
 
     def compute_pairwise_action_risk(self, ego_state, ego_index, ego_previous_action, agent_state, agent_index, agent_previous_action):
@@ -387,6 +385,7 @@ class GeordiModel(object):
         visualize = False
         safe_dist = 2
         n_samples = 20
+
         # get ego and agent pfts
         ego_pft = self.load_pft(ego_previous_action)
         agent_pft = self.load_pft(agent_previous_action)
@@ -395,14 +394,14 @@ class GeordiModel(object):
         # print('Agent info:', agent_state,agent_previous_action, agent_pft.l)
 
         # assume pft's have equal lengths
-        assert ego_pft.l == agent_pft.l, '{} - {}, {} - {}'.format(ego_previous_action, ego_pft.l, agent_previous_action, agent_pft.l)
+        assert ego_pft.l == agent_pft.l, 'Inconsistent pft lengths: {} - {}, {} - {}'.format(ego_previous_action, ego_pft.l, agent_previous_action, agent_pft.l)
         ego_pft_mu = ego_pft.pos_mu
         ego_pft_sigma = ego_pft.pos_sigma
         agent_pft_mu = agent_pft.pos_mu
         agent_pft_sigma = agent_pft.pos_sigma
 
-        # a quick hack
-        # TODO: fix this
+        # deal with case if agent indiex is greater than pft length
+        # TODO: investigate why would this happen
         if agent_index >= len(agent_pft_mu):
             agent_index = len(agent_pft_mu) - 1
 
@@ -412,17 +411,17 @@ class GeordiModel(object):
         agent_start = (agent_state[0] - (agent_pft_mu[-1][0] - agent_pft_mu[agent_index][0]),
                        agent_state[1] - (agent_pft_mu[-1][1] - agent_pft_mu[agent_index][1]))
 
-
-        # print('ego:', ego_start, ego_state)
-        # print('agent:', agent_start, agent_state, agent_index)
-
         if visualize:
+            print('ego:', ego_start, ego_state)
+            print('agent:', agent_start, agent_state, agent_index)
+
             plt.plot(ego_state[0], ego_state[1], 'rx')
             plt.plot(agent_state[0], agent_state[1], 'bx')
             plt.plot(ego_start[0], ego_start[1], 'ro')
             plt.plot(agent_start[0], agent_start[1], 'bo')
 
         p_collision = np.array([0.0]*ego_pft.l)
+
         for i in range(ego_pft.l):
             # compute shifted positions
             if i + ego_index < ego_pft.l:
@@ -446,15 +445,18 @@ class GeordiModel(object):
             # compute distance between pairwise locations
             dist = (ego_mu[0] - agent_mu[0]) ** 2 + (ego_mu[1] - agent_mu[1]) ** 2
 
+            # compute collision probability if two vehicles are too close using Monte Carlo sampling
             if dist < safe_dist ** 2:
                 if verbose:
                     print('Vehicle too close. Checking probability of collision...')
                     print('Step {}, distance {:.2f}, ego_mu: {}, agent_mu: {}'.format(i, dist, ego_mu, agent_mu))
 
+                # sample a set of ego positions and agent positions
                 ego_pos = np.random.multivariate_normal(ego_mu, ego_sigma, n_samples)
                 agent_pos = np.random.multivariate_normal(agent_mu, agent_sigma, n_samples)
                 collision_cnt = 0
 
+                # for each ego vehicle, if it collides with at least 1 vehicle, then mark as collision
                 for p in range(n_samples):
                     ego_p = ego_pos[p]
 
@@ -469,15 +471,17 @@ class GeordiModel(object):
                             collision_cnt += 1
                             break
 
+                # compute percentage of collisions
                 p_c = 1.0*collision_cnt/n_samples
                 p_collision[i] = p_c
 
         if visualize:
             plt.show()
 
+        # use the max collision probability along all possible clocks
         result = np.max(p_collision)    
-        # print('***Probability of collision:', result)
-        # print()
+        if verbose:
+            print('***Probability of collision:', result)
 
         return result
 
